@@ -138,7 +138,7 @@ export class KoshareRouterClient {
         log.verbose('koshare', 'full object: %j', body);
 
         return new Promise((resolve, reject) => {
-            this.socket.send(JSON.stringify({ type, ...body }), (err) => {
+            this.socket.send(JSON.stringify({ type, topic, ...body }), (err) => {
                 if (err) {
                     log.error('koshare', 'packet sending failed');
                     log.error('koshare', err.stack!);
