@@ -11,12 +11,15 @@ const connections: Map<number, RTCPeerConnection> = new Map();
 (async () => {
     const koshare = await KoshareRouterClient.create();
 
-    await koshare.subscribe(Topic.Ice, ({ candidate, src }: IceMessage) => {
+    await koshare.subscribe(Topic.Ice, async ({ candidate, src }: IceMessage) => {
         if (!connections.has(src)) {
             return;
         }
 
-        connections.get(src)!.addIceCandidate(candidate);
+        await connections.get(src)!.addIceCandidate(candidate);
+
+        log.info('wrtc', 'ice candidate added');
+        log.verbose('wrtc', '%j', candidate);
     });
 
     await koshare.subscribe(Topic.Ping, async ({ offer, src }: PingMessage) => {
@@ -26,17 +29,20 @@ const connections: Map<number, RTCPeerConnection> = new Map();
         const connection = new RTCPeerConnection();
         connections.set(src, connection);
 
-        connection.onicecandidate = ({ candidate }) => {
+        connection.onicecandidate = async ({ candidate }) => {
             if (candidate) {
-                log.info('wrtc', 'on ice candidate: %j', candidate);
-                koshare.message(Topic.Ice, src, { candidate });
+                log.info('wrtc', 'on ice candidate');
+                log.verbose('wrtc', '%j', candidate);
+
+                await koshare.message(Topic.Ice, src, { candidate });
             }
         }
 
         await connection.setRemoteDescription(offer);
+        log.info('wrtc', 'remote description set');
 
         const answer = await connection.createAnswer();
-        connection.setLocalDescription(answer);
+        await connection.setLocalDescription(answer);
 
         await koshare.message(Topic.Pong, src, { answer });
 

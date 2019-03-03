@@ -1,7 +1,7 @@
 import WebSocket from 'ws';
 import log from 'npmlog';
 
-log.level = 'verbose';
+log.level = 'silly';
 
 export enum PacketType {
     Error,
@@ -48,12 +48,12 @@ export type Packet = IncomingMessage | IncomingBoardcast | SubscribeResponse;
 
 export class KoshareRouterClient {
     public static create(endpoint: string = "ws://104.196.187.4:8888"): Promise<KoshareRouterClient> {
-        log.info('koshare', 'connecting to endpoint: %s', endpoint);
+        log.verbose('koshare', 'connecting to endpoint: %s', endpoint);
 
         return new Promise((resolve, reject) => {
             const socket = new WebSocket(endpoint);
             socket.on("open", () => {
-                log.info('koshare', 'connection established');
+                log.verbose('koshare', 'connection established');
 
                 resolve(new KoshareRouterClient(socket));
             });
@@ -85,12 +85,15 @@ export class KoshareRouterClient {
         this.socket.onerror = (err) => {
             this.alive = false;
         };
+        this.socket.onclose = () => {
+            this.alive = false;
+        };
 
         this.socket.onmessage = ({ data }) => {
             const packet = JSON.parse(data as string) as Packet;
 
-            log.info('koshare', 'packet received: %s', PacketType[packet.type] || 'UNKNOWN');
-            log.verbose('koshare', 'full object: %j', packet);
+            log.verbose('koshare', 'received: %s', PacketType[packet.type] || 'UNKNOWN');
+            log.silly('koshare', '%j', packet);
 
             switch (packet.type) {
                 case PacketType.Message:
@@ -134,18 +137,20 @@ export class KoshareRouterClient {
             Promise.reject(new Error('the KoshareRouterClient instance is disconnected'));
         }
 
-        log.info('koshare', 'packet sending: %s', PacketType[type] || 'UNKNOWN');
-        log.verbose('koshare', 'full object: %j', body);
+        log.verbose('koshare', 'sending: %s %s', PacketType[type] || 'UNKNOWN', topic);
+        if (typeof body === 'object') {
+            log.silly('koshare', '%j', body);
+        }
 
         return new Promise((resolve, reject) => {
             this.socket.send(JSON.stringify({ type, topic, ...body }), (err) => {
                 if (err) {
-                    log.error('koshare', 'packet sending failed');
+                    log.error('koshare', 'sending failed');
                     log.error('koshare', err.stack!);
 
                     reject(err);
                 } else {
-                    log.info('koshare', 'packet sent');
+                    log.verbose('koshare', 'sent');
 
                     this.resetKeepAlive();
                     resolve();
@@ -154,7 +159,7 @@ export class KoshareRouterClient {
         })
     }
 
-    private addOperation<T>(): { id: number, promise: Promise<T> } {
+    private async sendOperation<T>(type: PacketType, topic: string, body?: object): Promise<T> {
         const id = this.id++;
         const promise = new Promise<T>((resolve, reject) => {
             this.operations.set(id, {
@@ -163,22 +168,17 @@ export class KoshareRouterClient {
             });
         });
 
-        return {
-            id,
-            promise,
-        };
+        await this.send(type, topic, { id, ...body });
+        return await promise;
     }
 
     public async subscribe<T extends IncomingPacket>(topic: string, handler: IncomingPacketHandler<T>): Promise<void> {
         if (!this.handlers.has(topic)) {
             this.handlers.set(topic, new Set());
         }
-
         this.handlers.get(topic)!.add(handler);
 
-        const { id, promise } = this.addOperation();
-        await this.send(PacketType.Subscribe, topic, { id });
-        await promise;
+        await this.sendOperation<SubscribeResponse>(PacketType.Subscribe, topic);
     }
 
     public unsubscribe(topic: string): Promise<void>;
@@ -206,5 +206,12 @@ export class KoshareRouterClient {
 
     public message(topic: string, destination: number, body?: object): Promise<void> {
         return this.send(PacketType.Message, topic, { dst: destination, ...body });
+    }
+
+    public close() {
+        log.verbose('koshare', 'closing');
+
+        this.socket.close();
+        clearTimeout(this.keepAliveTimeout!);
     }
 }
