@@ -1,8 +1,8 @@
-import { createServer, Server } from 'net';
+import { createServer } from 'net';
 import { RTCPeerConnection } from 'wrtc';
 import log from 'npmlog';
 
-import { KoshareRouterClient, PacketType, IncomingMessage } from './koshare-router';
+import { KoshareRouterClient, IncomingMessage } from './koshare-router';
 import { IceMessage, Topic, PingMessage } from './common';
 
 interface PongMessage extends IncomingMessage {

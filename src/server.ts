@@ -3,7 +3,7 @@ import { randomBytes } from 'crypto';
 import { RTCPeerConnection } from 'wrtc';
 import log from 'npmlog';
 
-import { KoshareRouterClient, PacketType, IncomingBoardcast } from './koshare-router';
+import { KoshareRouterClient } from './koshare-router';
 import { Topic, IceMessage, PingMessage } from './common';
 import './proxy';
 
