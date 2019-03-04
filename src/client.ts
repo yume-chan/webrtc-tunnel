@@ -3,13 +3,20 @@ import { RTCPeerConnection } from 'wrtc';
 import log from 'npmlog';
 
 import { KoshareRouterClient, PacketType, IncomingMessage } from './koshare-router';
-import { IceMessage, Topic } from './common';
+import { IceMessage, Topic, PingMessage } from './common';
 
 interface PongMessage extends IncomingMessage {
     answer: RTCSessionDescriptionInit;
 }
 
 (async function main() {
+    const serverId = process.argv[2];
+    if (typeof serverId !== 'string') {
+        log.error('client', 'USAGE: npm run client -- <serverId>');
+        process.exit(-1);
+        return;
+    }
+
     const connection = new RTCPeerConnection({ iceServers: [{ urls: 'stun:stun.sipgate.net' }] });
 
     let candidates: RTCIceCandidate[] = [];
@@ -101,31 +108,31 @@ interface PongMessage extends IncomingMessage {
 
     const koshare = await KoshareRouterClient.create();
 
-    await koshare.subscribe(Topic.Ice, async ({ candidate }: IceMessage) => {
+    await koshare.subscribe<IceMessage>(Topic.Ice, async ({ candidate }) => {
         await connection.addIceCandidate(candidate);
 
         log.verbose('wrtc', 'ice candidate added');
         log.silly('wrtc', '%j', candidate);
     });
 
-    await koshare.subscribe(Topic.Pong, async ({ src, answer }: PongMessage) => {
+    await koshare.subscribe<PongMessage>(Topic.Pong, async ({ src, answer }) => {
         log.info('signal', 'pong packet received');
 
         await connection.setRemoteDescription(answer);
         log.verbose('wrtc', 'remote description set');
 
         for (const candidate of candidates) {
-            await koshare.message(Topic.Ice, src, { candidate });
+            await koshare.message<IceMessage>(Topic.Ice, src, { candidate });
         }
         candidates = [];
 
         connection.onicecandidate = async ({ candidate }) => {
             if (candidate) {
                 log.verbose('wrtc', 'on ice candidate: %j', candidate);
-                await koshare.message(Topic.Ice, src, { candidate });
+                await koshare.message<IceMessage>(Topic.Ice, src, { candidate });
             }
         };
     });
 
-    await koshare.boardcast(Topic.Ping, { offer });
+    await koshare.boardcast<PingMessage>(Topic.Ping, { serverId, offer });
 })();

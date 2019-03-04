@@ -1,17 +1,19 @@
 import { connect } from 'net';
+import { randomBytes } from 'crypto';
 import { RTCPeerConnection } from 'wrtc';
 import log from 'npmlog';
 
-import { KoshareRouterClient, PacketType } from './koshare-router';
+import { KoshareRouterClient, PacketType, IncomingBoardcast } from './koshare-router';
 import { Topic, IceMessage, PingMessage } from './common';
 import './proxy';
 
 const connections: Map<number, RTCPeerConnection> = new Map();
+const myId = randomBytes(8).toString('base64');
 
 (async () => {
     const koshare = await KoshareRouterClient.create();
 
-    await koshare.subscribe(Topic.Ice, async ({ candidate, src }: IceMessage) => {
+    await koshare.subscribe<IceMessage>(Topic.Ice, async ({ candidate, src }) => {
         if (!connections.has(src)) {
             return;
         }
@@ -22,7 +24,11 @@ const connections: Map<number, RTCPeerConnection> = new Map();
         log.verbose('wrtc', '%j', candidate);
     });
 
-    await koshare.subscribe(Topic.Ping, async ({ offer, src }: PingMessage) => {
+    await koshare.subscribe<PingMessage>(Topic.Ping, async ({ serverId, offer, src }) => {
+        if (serverId !== myId) {
+            return;
+        }
+
         log.info('signal', 'received packet: ping');
         log.info('signal', 'offer: %j', offer);
 
@@ -99,4 +105,6 @@ const connections: Map<number, RTCPeerConnection> = new Map();
             }
         };
     });
+
+    log.info('server', 'server id: %s', myId);
 })();

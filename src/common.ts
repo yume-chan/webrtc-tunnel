@@ -6,10 +6,12 @@ export enum Topic {
     Ice = 'yume-chan-tunnel-ice',
 }
 
-export interface IceMessage extends IncomingMessage {
+export interface IceMessage {
     candidate: RTCIceCandidate;
 }
 
-export interface PingMessage extends IncomingBoardcast {
+export interface PingMessage {
+    serverId: string;
+
     offer: RTCSessionDescriptionInit;
 }

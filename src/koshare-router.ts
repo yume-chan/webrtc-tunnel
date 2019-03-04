@@ -29,7 +29,7 @@ export interface IncomingMessage {
 
 type IncomingPacket = IncomingMessage | IncomingBoardcast;
 
-type IncomingPacketHandler<T extends IncomingPacket> = (message: T) => void;
+type IncomingPacketHandler<T extends object> = (message: T & IncomingPacket) => void;
 
 interface PromiseResolver<T> {
     resolve<T>(value: T): void;
@@ -45,6 +45,10 @@ export interface SubscribeResponse {
 }
 
 export type Packet = IncomingMessage | IncomingBoardcast | SubscribeResponse;
+
+export type ExcludeCommon<T> = T extends { topic: string }
+    ? Pick<T, Exclude<keyof T, 'topic' | 'dst'>>
+    : T;
 
 export class KoshareRouterClient {
     public static create(endpoint: string = "ws://104.196.187.4:8888"): Promise<KoshareRouterClient> {
@@ -172,7 +176,7 @@ export class KoshareRouterClient {
         return await promise;
     }
 
-    public async subscribe<T extends IncomingPacket>(topic: string, handler: IncomingPacketHandler<T>): Promise<void> {
+    public async subscribe<T extends object>(topic: string, handler: IncomingPacketHandler<T>): Promise<void> {
         if (!this.handlers.has(topic)) {
             this.handlers.set(topic, new Set());
         }
@@ -182,8 +186,8 @@ export class KoshareRouterClient {
     }
 
     public unsubscribe(topic: string): Promise<void>;
-    public unsubscribe<T extends IncomingPacket>(topic: string, handler: IncomingPacketHandler<T>): Promise<void>;
-    public async unsubscribe<T extends IncomingPacket>(topic: string, handler?: IncomingPacketHandler<T>): Promise<void> {
+    public unsubscribe<T extends object>(topic: string, handler: IncomingPacketHandler<T>): Promise<void>;
+    public async unsubscribe<T extends object>(topic: string, handler?: IncomingPacketHandler<T>): Promise<void> {
         if (!this.handlers.has(topic)) {
             return;
         }
@@ -200,11 +204,11 @@ export class KoshareRouterClient {
         return await this.send(PacketType.Unsubscribe, topic);
     }
 
-    public boardcast(topic: string, body?: object): Promise<void> {
+    public boardcast<T extends object>(topic: string, body?: T): Promise<void> {
         return this.send(PacketType.Boardcast, topic, body);
     }
 
-    public message(topic: string, destination: number, body?: object): Promise<void> {
+    public message<T extends object>(topic: string, destination: number, body?: T): Promise<void> {
         return this.send(PacketType.Message, topic, { dst: destination, ...body });
     }
 
