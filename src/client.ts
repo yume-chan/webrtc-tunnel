@@ -31,56 +31,58 @@ interface PongMessage extends IncomingMessage {
         }
     };
 
-    let server: Server;
+    let oldConnectionState: RTCPeerConnectionState = connection.connectionState;
     connection.onconnectionstatechange = () => {
-        console.log('------------------', 'connectionState', connection.connectionState);
+        // WORKAROUND: wrtc will fire multiple onconnectionstatechange with same connectionState
+        if (connection.connectionState === oldConnectionState) {
+            return;
+        }
+        oldConnectionState = connection.connectionState;
 
         switch (connection.connectionState) {
             case 'connected':
                 log.info('wrtc', 'connection established');
                 koshare.close();
 
-                if (server === undefined) {
-                    server = createServer((client) => {
-                        const label = `${client.remoteAddress}:${client.remotePort}`;
-                        const remote = connection.createDataChannel(label);
-                        remote.binaryType = 'arraybuffer';
+                const server = createServer((client) => {
+                    const label = `${client.remoteAddress}:${client.remotePort}`;
+                    const remote = connection.createDataChannel(label);
+                    remote.binaryType = 'arraybuffer';
 
-                        client.on('data', (data) => {
-                            if (remote.readyState !== 'open') {
-                                client.end();
-                                return;
-                            }
-
-                            try {
-                                remote.send(data);
-                            } catch (e) {
-                                client.end();
-                            }
-                        }).on('error', (err) => {
-                            log.error('forward', 'client %s error: %s', label, err.message);
-                            log.error('forward', err.stack!);
-                            remote.close();
-                        });
-
-                        remote.onmessage = ({ data }: { data: ArrayBuffer }) => {
-                            client.write(Buffer.from(data));
-                        };
-                        remote.onerror = ({ error }) => {
-                            log.error('forward', 'server error: %s', label, error!.message);
-                            log.error('forward', error!.stack!);
+                    client.on('data', (data) => {
+                        if (remote.readyState !== 'open') {
                             client.end();
-                        };
+                            return;
+                        }
+
+                        try {
+                            remote.send(data);
+                        } catch (e) {
+                            client.end();
+                        }
+                    }).on('error', (err) => {
+                        log.warn('forward', 'client %s error: %s', label, err.message);
+                        log.warn('forward', err.stack!);
+                        remote.close();
                     });
-                    server.on('error', (err) => {
-                        log.error('forward', 'server error: %s', err.message);
-                        log.error('forward', err.stack!);
-                        process.exit(-1);
-                    });
-                    server.listen(1082, () => {
-                        log.info('forward', 'listening on port %s', 1082);
-                    });
-                }
+
+                    remote.onmessage = ({ data }: { data: ArrayBuffer }) => {
+                        client.write(Buffer.from(data));
+                    };
+                    remote.onerror = ({ error }) => {
+                        log.warn('forward', 'server warn: %s', label, error!.message);
+                        log.warn('forward', error!.stack!);
+                        client.end();
+                    };
+                });
+                server.on('error', (err) => {
+                    log.error('forward', 'server error: %s', err.message);
+                    log.error('forward', err.stack!);
+                    process.exit(-1);
+                });
+                server.listen(1082, () => {
+                    log.info('forward', 'listening on port %s', 1082);
+                });
                 break;
             case 'failed':
                 log.error('wrtc', 'connection failed');
