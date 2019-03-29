@@ -74,6 +74,10 @@ interface PongMessage extends IncomingMessage {
                     });
 
                     remote.onmessage = ({ data }: { data: ArrayBuffer }) => {
+                        if (client.destroyed) {
+                            return;
+                        }
+
                         client.write(Buffer.from(data));
                     };
                     remote.onerror = ({ error }) => {
