@@ -53,6 +53,7 @@ interface HasProtector {
 
 async function safeSend(channel: RTCDataChannel & HasProtector, data: ArrayBuffer): Promise<void> {
     if (typeof channel[protectorSymbol] === 'undefined') {
+        channel.bufferedAmountLowThreshold = 1024 * 1024;
         channel[protectorSymbol] = new ConditionalVariable(() => channel.bufferedAmount < 16 * 1024 * 1024);
         channel.addEventListener('bufferedamountlow', () => channel[protectorSymbol]!.notify());
     }
