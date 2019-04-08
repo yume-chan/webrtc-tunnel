@@ -5,7 +5,7 @@ import log from 'npmlog';
 
 import { KoshareRouterClient } from './koshare-router';
 import { Topic, IceMessage, PingMessage } from './common';
-import DataChannelSender from './data-channel-sender';
+import RtcDataChannelStream from './data-channel-stream';
 import './proxy';
 
 const connections: Map<number, RTCPeerConnection> = new Map();
@@ -53,57 +53,40 @@ const myId = randomBytes(8).toString('base64');
 
         await koshare.message(Topic.Pong, src, { answer });
 
+        let controlChannel: RTCDataChannel | undefined;
+
         connection.ondatachannel = ({ channel: client }) => {
-            log.info('wrtc', 'on data channel: %s', client.label);
+            const label = client.label;
+            log.info('wrtc', 'on data channel: %s', label);
 
-            client.binaryType = 'arraybuffer';
             client.onopen = () => {
-                log.info('wrtc', 'on channel open: %s', client.label);
-                const clientSender = new DataChannelSender(client);
+                log.info('wrtc', 'on channel open: %s', label);
 
-                if (client.label !== 'control') {
-                    let pending: ArrayBuffer[] = [];
-                    client.onmessage = ({ data }: { data: ArrayBuffer }) => {
-                        log.info('forward', 'head received: %s', data.byteLength);
-                        pending.push(data);
-                    };
-
-                    const remote = connect(1083, 'localhost', async () => {
-                        log.info('forward', 'connected to %s:%s', 'localhost', 1083);
-
-                        for (const data of pending) {
-                            remote.write(Buffer.from(data));
-                        }
-                        pending = [];
-
-                        client.onmessage = ({ data }: { data: ArrayBuffer }) => {
-                            remote.write(Buffer.from(data));
-                        };
-
-                        for await (const data of remote) {
-                            if (client.readyState !== 'open') {
-                                remote.end();
-                                return;
-                            }
-
-                            try {
-                                await clientSender.send(data);
-                            } catch (e) {
-                                log.warn('forward', 'send error %s', e.message);
-                                remote.end();
-                            }
-                        }
-                    });
-                    remote.on('error', () => {
-                        client.close();
-                    });
-
-                    client.onclose = () => {
-                        log.info('forward', 'remote closed');
-                        remote.end();
-                    };
+                if (label === 'control') {
+                    controlChannel = client;
+                    return;
                 }
-            }
+
+                const clientStream = new RtcDataChannelStream(client, controlChannel!);
+                const remote = connect(1083, 'localhost', async () => {
+                    log.info('forward', 'connected to %s:%s', 'localhost', 1083);
+
+                    clientStream.pipe(remote);
+                    remote.pipe(clientStream);
+                });
+
+                remote.on('error', (error) => {
+                    log.warn('forward', 'server %s error: %s', label, error.message);
+                    log.warn('forward', error.stack!);
+                });
+
+                clientStream.on('error', (error) => {
+                    log.warn('forward', 'client %s error: %s', label, error.message);
+                    log.warn('forward', error.stack!);
+
+                    remote.end();
+                });
+            };
         };
     });
 

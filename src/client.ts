@@ -4,7 +4,7 @@ import log from 'npmlog';
 
 import { KoshareRouterClient, IncomingMessage } from './koshare-router';
 import { IceMessage, Topic, PingMessage } from './common';
-import DataChannelSender from './data-channel-sender';
+import RtcDataChannelStream from './data-channel-stream';
 
 interface PongMessage extends IncomingMessage {
     answer: RTCSessionDescriptionInit;
@@ -17,46 +17,30 @@ if (typeof serverId !== 'string') {
 }
 
 let rtcConnection: RTCPeerConnection | undefined;
+let controlChannel: RTCDataChannel | undefined;
 let connecting: boolean = false;
 const pendingConnections: Set<Socket> = new Set();
 
 async function handleConnection(client: Socket) {
     const label = `${client.remoteAddress}:${client.remotePort}`;
     const remote = rtcConnection!.createDataChannel(label);
-    remote.binaryType = 'arraybuffer';
 
-    const remoteSender = new DataChannelSender(remote);
+    const remoteStream = new RtcDataChannelStream(remote, controlChannel!);
+    remoteStream.pipe(client);
+    client.pipe(remoteStream);
 
-    remote.onmessage = ({ data }: { data: ArrayBuffer }) => {
-        if (client.destroyed) {
-            return;
-        }
-
-        client.write(Buffer.from(data));
-    };
-
-    remote.onerror = ({ error }) => {
-        log.warn('forward', 'server warn: %s', label, error!.message);
-        log.warn('forward', error!.stack!);
+    remoteStream.on('error', (error) => {
+        log.warn('forward', 'server %s error: %s', label, error.message);
+        log.warn('forward', error.stack!);
         client.end();
-    };
+    });
 
-    try {
-        for await (const data of client as AsyncIterable<Buffer>) {
-            if (remote.readyState !== 'open') {
-                client.end();
-                return;
-            }
+    client.on('error', (error) => {
+        log.warn('forward', 'client %s error: %s', label, error.message);
+        log.warn('forward', error.stack!);
 
-            await remoteSender.send(data);
-        }
-    } catch (err) {
-        log.warn('forward', 'client %s error: %s', label, err.message);
-        log.warn('forward', err.stack!);
-
-        client.end();
-        remote.close();
-    }
+        remoteStream.end();
+    });
 }
 
 const server = createServer((client) => {
@@ -121,6 +105,7 @@ async function createRtcConnection(serverId: string) {
     connection.onconnectionstatechange = () => {
         // WORKAROUND: wrtc will fire multiple onconnectionstatechange with same connectionState
         if (connection.connectionState === oldConnectionState) {
+            log.verbose('wrtc', 'onconnectionstatechange fired without connectionState changing');
             return;
         }
         oldConnectionState = connection.connectionState;
@@ -149,6 +134,7 @@ async function createRtcConnection(serverId: string) {
     const channel = connection.createDataChannel('control');
     channel.onopen = () => {
         log.verbose('wrtc', 'channel open: control');
+        controlChannel = channel;
     };
 
     const offer = await connection.createOffer();

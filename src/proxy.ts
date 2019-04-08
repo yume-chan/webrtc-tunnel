@@ -13,7 +13,7 @@ async function lookup(hostname: string): Promise<string> {
         return hosts[hostname];
     }
 
-    return await dns.lookup(hostname);
+    return (await dns.lookup(hostname)).address;
 }
 
 const server = createServer(async (incoming, client) => {
