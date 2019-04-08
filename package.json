@@ -11,12 +11,12 @@
   "author": "",
   "license": "ISC",
   "dependencies": {
-    "@types/node": "^11.12.1",
+    "@types/node": "^11.13.0",
     "@types/npmlog": "^4.1.1",
     "@types/ws": "^6.0.1",
     "npmlog": "^4.1.2",
     "ts-node": "^8.0.3",
-    "typescript": "^3.3.4000",
+    "typescript": "^3.4.2",
     "wrtc": "^0.3.7",
     "ws": "^6.2.1"
   }

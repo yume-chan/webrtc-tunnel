@@ -1,13 +1,43 @@
 import { request, createServer, IncomingMessage } from 'http';
 import { connect, Socket } from 'net';
+import * as url from 'url';
+// @ts-ignore
+import { promises as dns } from 'dns';
 import log from 'npmlog';
 
-const server = createServer((incoming, client) => {
+import hosts from './hosts';
+
+
+async function lookup(hostname: string): Promise<string> {
+    if (hosts[hostname]) {
+        return hosts[hostname];
+    }
+
+    return await dns.lookup(hostname);
+}
+
+const server = createServer(async (incoming, client) => {
     log.info('proxy', 'incoming request: %s %s', incoming.method, incoming.url);
 
-    const outgoing = request(incoming.url!, {
+    const parsed = url.parse(incoming.url!);
+    const { hostname } = parsed;
+
+    let address: string;
+    try {
+        address = await lookup(hostname!);
+    } catch (err) {
+        log.error('proxy', 'host resolving error: %s', err.message);
+        log.error('proxy', err.stack!);
+        client.end();
+        return;
+    }
+
+    const outgoing = request({
+        ...parsed,
+        hostname: address,
         method: incoming.method,
         headers: incoming.headers,
+        setHost: false,
     }, (response) => {
         log.info('proxy', 'got response for: %s %s', incoming.method, incoming.url);
 
@@ -42,27 +72,38 @@ const server = createServer((incoming, client) => {
         outgoing.abort();
     });
 });
-server.on('connect', (request: IncomingMessage, socket: Socket, head: Buffer) => {
+server.on('connect', async (request: IncomingMessage, client: Socket, head: Buffer) => {
     log.info('proxy', 'incoming request: %s %s', 'CONNECT', request.url);
 
-    const [host, port = "80"] = request.url!.split(":");
-    const remote = connect(parseInt(port, 10), host, () => {
-        socket.write(`HTTP/${request.httpVersion} 200 OK\r\n\r\n`);
+    const [hostname, port = "80"] = request.url!.split(":");
+
+    let address: string;
+    try {
+        address = await lookup(hostname);
+    } catch (err) {
+        log.error('proxy', 'host resolving error: %s', err.message);
+        log.error('proxy', err.stack!);
+        client.end();
+        return;
+    }
+
+    const remote = connect(parseInt(port, 10), address, () => {
+        client.write(`HTTP/${request.httpVersion} 200 OK\r\n\r\n`);
         remote.write(head);
 
-        socket.pipe(remote);
-        remote.pipe(socket);
+        client.pipe(remote);
+        remote.pipe(client);
     }).on("error", (err) => {
         log.error('proxy', 'response error: %s', err.message);
         log.error('proxy', err.stack!);
 
-        socket.write(`HTTP/${request.httpVersion} 502 Bad Gateway\r\n\r\n`);
-        socket.end();
+        client.write(`HTTP/${request.httpVersion} 502 Bad Gateway\r\n\r\n`);
+        client.end();
     }).on("end", () => {
-        socket.end();
+        client.end();
     });
 
-    socket.on("error", err => {
+    client.on("error", err => {
         log.error('proxy', 'client error: %s', err.message);
         log.error('proxy', err.stack!);
 
