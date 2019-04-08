@@ -1,21 +1,88 @@
-import { createServer } from 'net';
+import { createServer, Socket } from 'net';
 import { RTCPeerConnection } from 'wrtc';
 import log from 'npmlog';
 
 import { KoshareRouterClient, IncomingMessage } from './koshare-router';
 import { IceMessage, Topic, PingMessage } from './common';
+import DataChannelSender from './data-channel-sender';
 
 interface PongMessage extends IncomingMessage {
     answer: RTCSessionDescriptionInit;
 }
 
-(async function main() {
-    const serverId = process.argv[2];
-    if (typeof serverId !== 'string') {
-        log.error('client', 'USAGE: npm run client -- <serverId>');
-        process.exit(-1);
+const serverId = process.argv[2];
+if (typeof serverId !== 'string') {
+    log.error('client', 'USAGE: npm run client -- <serverId>');
+    process.exit(-1);
+}
+
+let rtcConnection: RTCPeerConnection | undefined;
+let connecting: boolean = false;
+const pendingConnections: Set<Socket> = new Set();
+
+async function handleConnection(client: Socket) {
+    const label = `${client.remoteAddress}:${client.remotePort}`;
+    const remote = rtcConnection!.createDataChannel(label);
+    remote.binaryType = 'arraybuffer';
+
+    const remoteSender = new DataChannelSender(remote);
+
+    remote.onmessage = ({ data }: { data: ArrayBuffer }) => {
+        if (client.destroyed) {
+            return;
+        }
+
+        client.write(Buffer.from(data));
+    };
+
+    remote.onerror = ({ error }) => {
+        log.warn('forward', 'server warn: %s', label, error!.message);
+        log.warn('forward', error!.stack!);
+        client.end();
+    };
+
+    try {
+        for await (const data of client as AsyncIterable<Buffer>) {
+            if (remote.readyState !== 'open') {
+                client.end();
+                return;
+            }
+
+            await remoteSender.send(data);
+        }
+    } catch (err) {
+        log.warn('forward', 'client %s error: %s', label, err.message);
+        log.warn('forward', err.stack!);
+
+        client.end();
+        remote.close();
+    }
+}
+
+const server = createServer((client) => {
+    if (typeof rtcConnection === 'undefined') {
+        pendingConnections.add(client);
+
+        if (!connecting) {
+            createRtcConnection(serverId);
+        }
         return;
     }
+
+    handleConnection(client);
+});
+
+server.on('error', (err) => {
+    log.error('forward', 'server error: %s', err.message);
+    log.error('forward', err.stack!);
+});
+
+server.listen(1082, () => {
+    log.info('forward', 'listening on port %s', 1082);
+});
+
+async function createRtcConnection(serverId: string) {
+    connecting = true;
 
     const connection = new RTCPeerConnection({ iceServers: [{ urls: 'stun:stun.sipgate.net' }] });
 
@@ -50,54 +117,18 @@ interface PongMessage extends IncomingMessage {
             case 'connected':
                 log.info('wrtc', 'connection established');
                 koshare.close();
+                rtcConnection = connection;
+                connecting = false;
 
-                const server = createServer((client) => {
-                    const label = `${client.remoteAddress}:${client.remotePort}`;
-                    const remote = connection.createDataChannel(label);
-                    remote.binaryType = 'arraybuffer';
-
-                    client.on('data', (data) => {
-                        if (remote.readyState !== 'open') {
-                            client.end();
-                            return;
-                        }
-
-                        try {
-                            remote.send(data);
-                        } catch (e) {
-                            client.end();
-                        }
-                    }).on('error', (err) => {
-                        log.warn('forward', 'client %s error: %s', label, err.message);
-                        log.warn('forward', err.stack!);
-                        remote.close();
-                    });
-
-                    remote.onmessage = ({ data }: { data: ArrayBuffer }) => {
-                        if (client.destroyed) {
-                            return;
-                        }
-
-                        client.write(Buffer.from(data));
-                    };
-                    remote.onerror = ({ error }) => {
-                        log.warn('forward', 'server warn: %s', label, error!.message);
-                        log.warn('forward', error!.stack!);
-                        client.end();
-                    };
-                });
-                server.on('error', (err) => {
-                    log.error('forward', 'server error: %s', err.message);
-                    log.error('forward', err.stack!);
-                    process.exit(-1);
-                });
-                server.listen(1082, () => {
-                    log.info('forward', 'listening on port %s', 1082);
-                });
+                for (const client of pendingConnections) {
+                    handleConnection(client);
+                }
+                pendingConnections.clear();
                 break;
             case 'failed':
                 log.error('wrtc', 'connection failed');
                 koshare.close();
+                rtcConnection = undefined;
                 break;
         }
     }
@@ -139,4 +170,4 @@ interface PongMessage extends IncomingMessage {
     });
 
     await koshare.boardcast<PingMessage>(Topic.Ping, { serverId, offer });
-})();
+}

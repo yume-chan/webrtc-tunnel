@@ -46,8 +46,17 @@ interface HasProtector {
 
 async function safeSend(channel: RTCDataChannel & HasProtector, data: ArrayBuffer): Promise<void> {
     if (typeof channel[protectorSymbol] === 'undefined') {
-        channel[protectorSymbol] = new ConditionalVariable(() => channel.bufferedAmount < 16 * 1024 * 1024);
-        channel.addEventListener('bufferedamountlow', () => channel[protectorSymbol]!.notify());
+        channel.bufferedAmountLowThreshold = 1024;
+        channel[protectorSymbol] = new ConditionalVariable(() => {
+            return channel.bufferedAmount < 16 * 1024 * 1024;
+        });
+        // channel.onbufferedamountlow = () => {
+        //     channel[protectorSymbol]!.notify();
+        // };
+        const interval = setInterval(() => {
+            channel[protectorSymbol]!.notify();
+        }, 1000);
+        channel.addEventListener('close', () => clearInterval(interval));
     }
 
     const protector = channel[protectorSymbol]!;
@@ -57,16 +66,18 @@ async function safeSend(channel: RTCDataChannel & HasProtector, data: ArrayBuffe
     try {
         channel.send(data);
     } finally {
-        protector.notify();
+        // protector.notify();
     }
 }
 
 (async () => {
     const p1 = new RTCPeerConnection();
     const c1 = p1.createDataChannel('control');
-    c1.onmessage = ({ data }) => {
-        console.log(`${Date.now()} received ${count++} times`);
-    };
+    setTimeout(() => {
+        c1.onmessage = () => {
+            console.log(`${Date.now()} received ${count++} times`);
+        };
+    }, 2000);
     c1.onclose = () => {
         console.log('c1 closed');
     };
@@ -103,6 +114,6 @@ async function safeSend(channel: RTCDataChannel & HasProtector, data: ArrayBuffe
             if (c2.readyState === 'open') {
                 await safeSend(c2, data);
             }
-        }, 1);
+        }, 100);
     };
 })()

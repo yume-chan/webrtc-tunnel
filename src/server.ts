@@ -5,69 +5,11 @@ import log from 'npmlog';
 
 import { KoshareRouterClient } from './koshare-router';
 import { Topic, IceMessage, PingMessage } from './common';
+import DataChannelSender from './data-channel-sender';
 import './proxy';
 
 const connections: Map<number, RTCPeerConnection> = new Map();
 const myId = randomBytes(8).toString('base64');
-
-class ConditionalVariable {
-    private _queue: Array<() => void> = [];
-
-    private _condition: () => boolean;
-
-    private _resolvedPromise: Promise<void> = Promise.resolve();
-
-    constructor(condition: () => boolean) {
-        this._condition = condition;
-    }
-
-    public wait(): Promise<void> {
-        if (this._condition()) {
-            return this._resolvedPromise;
-        }
-
-        const promise = new Promise<void>(resolve => {
-            this._queue.push(resolve);
-        });
-        return promise;
-    }
-
-    public notify() {
-        if (this._queue.length === 0) {
-            return;
-        }
-
-        if (!this._condition()) {
-            return;
-        }
-
-        this._queue.shift()!();
-    }
-}
-
-const protectorSymbol = Symbol('protector');
-
-interface HasProtector {
-    [protectorSymbol]?: ConditionalVariable;
-}
-
-async function safeSend(channel: RTCDataChannel & HasProtector, data: ArrayBuffer): Promise<void> {
-    if (typeof channel[protectorSymbol] === 'undefined') {
-        channel.bufferedAmountLowThreshold = 1024 * 1024;
-        channel[protectorSymbol] = new ConditionalVariable(() => channel.bufferedAmount < 16 * 1024 * 1024);
-        channel.addEventListener('bufferedamountlow', () => channel[protectorSymbol]!.notify());
-    }
-
-    const protector = channel[protectorSymbol]!;
-
-    await protector.wait();
-
-    try {
-        channel.send(data);
-    } finally {
-        protector.notify();
-    }
-}
 
 (async () => {
     const koshare = await KoshareRouterClient.create();
@@ -117,6 +59,7 @@ async function safeSend(channel: RTCDataChannel & HasProtector, data: ArrayBuffe
             client.binaryType = 'arraybuffer';
             client.onopen = () => {
                 log.info('wrtc', 'on channel open: %s', client.label);
+                const clientSender = new DataChannelSender(client);
 
                 if (client.label !== 'control') {
                     let pending: ArrayBuffer[] = [];
@@ -125,7 +68,7 @@ async function safeSend(channel: RTCDataChannel & HasProtector, data: ArrayBuffe
                         pending.push(data);
                     };
 
-                    const remote = connect(1083, 'localhost', () => {
+                    const remote = connect(1083, 'localhost', async () => {
                         log.info('forward', 'connected to %s:%s', 'localhost', 1083);
 
                         for (const data of pending) {
@@ -137,29 +80,28 @@ async function safeSend(channel: RTCDataChannel & HasProtector, data: ArrayBuffe
                             remote.write(Buffer.from(data));
                         };
 
-                        remote.on('data', async (data) => {
+                        for await (const data of remote) {
                             if (client.readyState !== 'open') {
                                 remote.end();
                                 return;
                             }
 
                             try {
-                                await safeSend(client, data);
+                                await clientSender.send(data);
                             } catch (e) {
+                                log.warn('forward', 'send error %s', e.message);
                                 remote.end();
                             }
-                        });
+                        }
                     });
                     remote.on('error', () => {
                         client.close();
                     });
-                    remote.on('close', () => {
-                        client.close();
-                    });
 
                     client.onclose = () => {
+                        log.info('forward', 'remote closed');
                         remote.end();
-                    }
+                    };
                 }
             }
         };
