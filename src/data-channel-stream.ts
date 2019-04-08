@@ -68,7 +68,6 @@ export default class RtcDataChannelStream extends Duplex {
         super({ allowHalfOpen: false });
 
         this._controlChannel = controlChannel;
-        this._controlChannel.binaryType = 'string';
         this._controlChannel.addEventListener('message', this.handleControlMessage);
 
         this._dataChannel = dataChannel;
@@ -117,7 +116,7 @@ export default class RtcDataChannelStream extends Duplex {
 
     private flushBuffer(): void {
         while (this._buffer.length) {
-            if (!this.push(this._buffer.unshift())) {
+            if (!this.push(this._buffer.shift())) {
                 this._localFull = true;
                 this._controlChannel.send(JSON.stringify({ type: 'full', label: this._dataChannel.label }));
                 return;

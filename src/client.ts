@@ -114,14 +114,6 @@ async function createRtcConnection(serverId: string) {
             case 'connected':
                 log.info('wrtc', 'connection established');
                 koshare.close();
-                rtcConnection = connection;
-                connecting = false;
-                clearTimeout(timeout);
-
-                for (const client of pendingConnections) {
-                    handleConnection(client);
-                }
-                pendingConnections.clear();
                 break;
             case 'failed':
                 log.error('wrtc', 'connection failed');
@@ -134,7 +126,16 @@ async function createRtcConnection(serverId: string) {
     const channel = connection.createDataChannel('control');
     channel.onopen = () => {
         log.verbose('wrtc', 'channel open: control');
+
+        rtcConnection = connection;
         controlChannel = channel;
+        connecting = false;
+        clearTimeout(timeout);
+
+        for (const client of pendingConnections) {
+            handleConnection(client);
+        }
+        pendingConnections.clear();
     };
 
     const offer = await connection.createOffer();
