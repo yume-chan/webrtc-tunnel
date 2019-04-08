@@ -84,6 +84,18 @@ server.listen(1082, () => {
 async function createRtcConnection(serverId: string) {
     connecting = true;
 
+    function handleConnectionFailed() {
+        rtcConnection = undefined;
+        connecting = false;
+
+        for (const client of pendingConnections) {
+            client.end();
+        }
+        pendingConnections.clear();
+    }
+
+    const timeout = setTimeout(handleConnectionFailed, 10000);
+
     const connection = new RTCPeerConnection({ iceServers: [{ urls: 'stun:stun.sipgate.net' }] });
 
     let candidates: RTCIceCandidate[] = [];
@@ -119,6 +131,7 @@ async function createRtcConnection(serverId: string) {
                 koshare.close();
                 rtcConnection = connection;
                 connecting = false;
+                clearTimeout(timeout);
 
                 for (const client of pendingConnections) {
                     handleConnection(client);
@@ -128,7 +141,7 @@ async function createRtcConnection(serverId: string) {
             case 'failed':
                 log.error('wrtc', 'connection failed');
                 koshare.close();
-                rtcConnection = undefined;
+                handleConnectionFailed();
                 break;
         }
     }

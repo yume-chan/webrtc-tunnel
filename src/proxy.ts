@@ -24,6 +24,13 @@ const server = createServer((incoming, client) => {
         });
     });
 
+    outgoing.on('error', (err) => {
+        log.error('proxy', 'remote error: %s', err.message);
+        log.error('proxy', err.stack!);
+
+        client.end();
+    });
+
     incoming.pipe(outgoing);
 
     incoming.on("error", err => {
