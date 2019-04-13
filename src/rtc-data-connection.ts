@@ -72,8 +72,12 @@ export class RtcDataConnectionListener {
 }
 
 export default class RtcDataConnection extends EventEmitter {
-    public static async connect(serverId: string, signal: RtcSignalClient): Promise<RtcDataConnection> {
-        const connection: RTCPeerConnection = new RTCPeerConnection();
+    public static async connect(
+        serverId: string,
+        signal: RtcSignalClient,
+        configuration?: RTCConfiguration
+    ): Promise<RtcDataConnection> {
+        const connection: RTCPeerConnection = new RTCPeerConnection(configuration);
         const candidates = new RtcIceCandidateBuffer(connection);
         const channel = connection.createDataChannel('control');
 

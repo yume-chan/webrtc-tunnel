@@ -19,17 +19,22 @@ if (typeof serverId !== 'string') {
 }
 
 let _connect: Promise<RtcDataConnection> | null = null;
-async function connect(): Promise<RtcDataConnection> {
-    if (_connect === null) {
-        _connect = RtcDataConnection.connect(
+function connect(): Promise<RtcDataConnection> {
+    async function core() {
+        return RtcDataConnection.connect(
             serverId,
             new RtcSignalClient(
                 clientId,
                 new KoshareRtcSignalTransport(
-                    await KoshareClient.connect(prefix))));
+                    await KoshareClient.connect(prefix))),
+            { iceServers: [{ urls: 'stun:stun.sipgate.net' }] });
     }
 
-    return await _connect;
+    if (_connect === null) {
+        _connect = core();
+    }
+
+    return _connect;
 }
 
 const server = createServer(async (client) => {
