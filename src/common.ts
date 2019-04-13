@@ -1,1 +1,1 @@
-export const prefix = 'yume-chan/webrtc-tunnel';
+export const prefix = 'yume-chan/';
