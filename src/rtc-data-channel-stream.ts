@@ -1,7 +1,8 @@
 import { Duplex } from 'stream';
-const resolvedPromise = Promise.resolve();
 
-class ConditionalVariable {
+class ConditionVariable {
+    private static resolvedPromise = Promise.resolve();
+
     private _queue: Array<() => void> = [];
 
     private _condition: () => boolean;
@@ -12,7 +13,7 @@ class ConditionalVariable {
 
     public wait(): Promise<void> {
         if (this._condition()) {
-            return resolvedPromise;
+            return ConditionVariable.resolvedPromise;
         }
 
         const promise = new Promise<void>(resolve => {
@@ -54,15 +55,17 @@ const useSetTimeoutFallback = true;
 
 export default class RtcDataChannelStream extends Duplex {
     private _dataChannel: RTCDataChannel;
-
     private _controlChannel: RTCDataChannel;
 
-    private _variable: ConditionalVariable;
+    private _variable: ConditionVariable;
 
     private _remoteFull: boolean = false;
+    private _localFullOld: boolean = false;
     private _localFull: boolean = false;
 
     private _buffer: Buffer[] = [];
+
+    public get label(): string { return this._dataChannel.label; }
 
     public constructor(dataChannel: RTCDataChannel, controlChannel: RTCDataChannel) {
         super({ allowHalfOpen: false });
@@ -72,9 +75,8 @@ export default class RtcDataChannelStream extends Duplex {
 
         this._dataChannel = dataChannel;
         this._dataChannel.binaryType = 'arraybuffer';
-        this._dataChannel.bufferedAmountLowThreshold = 1024 * 1024;
 
-        this._variable = new ConditionalVariable(this.canSend);
+        this._variable = new ConditionVariable(this.canSend);
 
         if (useSetTimeoutFallback) {
             const interval = setInterval(() => {
@@ -85,6 +87,8 @@ export default class RtcDataChannelStream extends Duplex {
                 clearInterval(interval);
             });
         } else {
+            this._dataChannel.bufferedAmountLowThreshold = 1024 * 1024;
+
             this._dataChannel.addEventListener('bufferedamountlow', () => {
                 this._variable.notify();
             });
@@ -114,16 +118,36 @@ export default class RtcDataChannelStream extends Duplex {
         })
     }
 
-    private flushBuffer(): void {
-        while (this._buffer.length) {
-            if (!this.push(this._buffer.shift())) {
-                this._localFull = true;
-                this._controlChannel.send(JSON.stringify({ type: 'full', label: this._dataChannel.label }));
-                return;
-            }
-        }
+    private sendControlMessage(type: 'empty' | 'full') {
+        this._dataChannel.send(JSON.stringify({
+            type,
+            label: this._dataChannel.label,
+        }));
+    }
 
-        this._controlChannel.send(JSON.stringify({ type: 'empty', label: this._dataChannel.label }));
+    private flushBuffer(): void {
+        try {
+            while (this._buffer.length) {
+                if (!this.push(this._buffer.shift())) {
+                    this._localFull = true;
+                    if (!this._localFullOld) {
+                        this.sendControlMessage('full');
+                    }
+                    this._localFullOld = this._localFull;
+                    return;
+                }
+            }
+
+            this._localFull = false;
+            if (this._localFullOld) {
+                this.sendControlMessage('empty');
+            }
+            this._localFullOld = this._localFull;
+        } catch (error) {
+            process.nextTick(() => {
+                this.emit('error', error);
+            });
+        }
     }
 
     private handleControlMessage = ({ data }: { data: string }) => {
@@ -142,7 +166,7 @@ export default class RtcDataChannelStream extends Duplex {
     }
 
     private canSend = () => {
-        return !this._remoteFull && this._dataChannel.bufferedAmount < 16 * 1024 * 1024;
+        return !this._remoteFull && this._dataChannel.bufferedAmount < 4 * 1024 * 1024;
     }
 
     public async _write(chunk: Buffer, encoding: string, callback: (err?: Error) => void): Promise<void> {
@@ -151,10 +175,9 @@ export default class RtcDataChannelStream extends Duplex {
         try {
             this._dataChannel.send(chunk);
             callback();
-        } catch (err) {
-            callback(err);
-        } finally {
             this._variable.notify();
+        } catch (error) {
+            callback(error);
         }
     }
 

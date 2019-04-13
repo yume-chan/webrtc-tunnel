@@ -42,15 +42,17 @@
             "sourceMaps": true,
             "cwd": "${workspaceRoot}",
             "protocol": "inspector",
+        },
+        {
+            "type": "node",
+            "request": "launch",
+            "name": "Jest Tests",
+            "program": "${workspaceFolder}/node_modules/jest/bin/jest",
+            "sourceMaps": true,
+            "args": [
+                "--runInBand",
+            ],
+            "internalConsoleOptions": "openOnSessionStart"
         }
     ],
-    "compounds": [
-        {
-            "name": "Launch Both",
-            "configurations": [
-                "Launch Server",
-                "Launch Client"
-            ]
-        }
-    ]
 }

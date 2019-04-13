@@ -1,7 +1,8 @@
-import WebSocket from 'ws';
 import log from 'npmlog';
+import WebSocket from 'ws';
 
-log.level = 'silly';
+import AsyncOperationManager from './async-operation-manager';
+import MultiMap from './multi-map';
 
 export enum PacketType {
     Error,
@@ -27,14 +28,9 @@ export interface IncomingMessage {
     src: number;
 }
 
-type IncomingPacket = IncomingMessage | IncomingBoardcast;
+export type IncomingPacket<T> = { body: T } & (IncomingMessage | IncomingBoardcast);
 
-type IncomingPacketHandler<T extends object> = (message: T & IncomingPacket) => void;
-
-interface PromiseResolver<T> {
-    resolve<T>(value: T): void;
-    reject(error: Error): void;
-}
+type IncomingPacketHandler<T> = (message: IncomingPacket<T>) => void;
 
 export interface SubscribeResponse {
     type: PacketType.Subscribe;
@@ -50,17 +46,19 @@ export type ExcludeCommon<T> = T extends { topic: string }
     ? Pick<T, Exclude<keyof T, 'topic' | 'dst'>>
     : T;
 
-export class KoshareRouterClient {
-    public static create(endpoint: string = "ws://104.196.187.4:8888"): Promise<KoshareRouterClient> {
+export default class KoshareClient {
+    public static connect(prefix: string = '', endpoint: string = "ws://104.196.187.4:8888"): Promise<KoshareClient> {
         log.verbose('koshare', 'connecting to endpoint: %s', endpoint);
 
         return new Promise((resolve, reject) => {
             const socket = new WebSocket(endpoint);
+
             socket.on("open", () => {
                 log.verbose('koshare', 'connection established');
 
-                resolve(new KoshareRouterClient(socket));
+                resolve(new KoshareClient(prefix, socket));
             });
+
             socket.on("error", (err) => {
                 log.error('koshare', 'connection failed');
                 log.error('koshare', err.stack!);
@@ -70,19 +68,24 @@ export class KoshareRouterClient {
         })
     }
 
+    private _prefix: string;
+    public get prefix(): string { return this._prefix; }
+
     public socket: WebSocket;
 
     public alive: boolean;
 
-    private id: number = 0;
+    private _operationManager: AsyncOperationManager = new AsyncOperationManager();
 
-    private operations: Map<number, PromiseResolver<unknown>> = new Map();
+    private _handlers: MultiMap<string, Function> = new MultiMap();
 
-    private handlers: Map<string, Set<Function>> = new Map();
+    private _keepAliveInterval: number;
 
-    private keepAliveTimeout: NodeJS.Timeout | null = null;
+    private _keepAliveTimeoutId: NodeJS.Timeout | null = null;
 
-    private constructor(socket: WebSocket) {
+    private constructor(prefix: string, socket: WebSocket, keepAliveInterval = 60 * 1000) {
+        this._prefix = prefix;
+
         this.socket = socket;
         this.alive = true;
 
@@ -99,123 +102,107 @@ export class KoshareRouterClient {
             log.verbose('koshare', 'received: %s', PacketType[packet.type] || 'UNKNOWN');
             log.silly('koshare', '%j', packet);
 
+            const topic = packet.topic.substring(this._prefix.length);
+
             switch (packet.type) {
                 case PacketType.Message:
                 case PacketType.Boardcast:
-                    if (this.handlers.has(packet.topic)) {
-                        const handlers = this.handlers.get(packet.topic)!;
-                        for (const handler of handlers) {
-                            (handler as Function)(packet);
-                        }
+                    for (const handler of this._handlers.get(topic)) {
+                        handler(packet);
                     }
                     break;
                 case PacketType.Subscribe:
-                    if (this.operations.has(packet.id)) {
-                        const resolver = this.operations.get(packet.id)!;
-                        if (typeof packet.error === 'string') {
-                            resolver.reject(new Error(packet.error));
-                        } else {
-                            resolver.resolve(packet);
-                        }
-                        this.operations.delete(packet.id);
+                    if (typeof packet.error === 'string') {
+                        this._operationManager.reject(packet.id, new Error(packet.error));
+                    } else {
+                        this._operationManager.resolve(packet.id, packet);
                     }
                     break;
             }
         }
 
+        this._keepAliveInterval = keepAliveInterval;
         this.resetKeepAlive();
     }
 
     private resetKeepAlive() {
-        if (this.keepAliveTimeout !== null) {
-            clearTimeout(this.keepAliveTimeout);
+        if (this._keepAliveTimeoutId !== null) {
+            clearTimeout(this._keepAliveTimeoutId);
         }
 
-        this.keepAliveTimeout = setTimeout(async () => {
+        this._keepAliveTimeoutId = setTimeout(async () => {
             await this.send(PacketType.Error, 'keep-alive');
         }, 60 * 1000);
     }
 
-    private send(type: PacketType, topic: string, body?: object): Promise<void> {
+    private send(type: PacketType, topic: string, extra?: object): Promise<void> {
         if (!this.alive) {
             Promise.reject(new Error('the KoshareRouterClient instance is disconnected'));
         }
 
         log.verbose('koshare', 'sending: %s %s', PacketType[type] || 'UNKNOWN', topic);
-        if (typeof body === 'object') {
-            log.silly('koshare', '%j', body);
+        if (typeof extra === 'object') {
+            log.silly('koshare', '%j', extra);
         }
 
+        topic = this._prefix + topic;
+
         return new Promise((resolve, reject) => {
-            this.socket.send(JSON.stringify({ type, topic, ...body }), (err) => {
-                if (err) {
+            this.socket.send(JSON.stringify({ type, topic, ...extra }), (error) => {
+                /* istanbul ignore if */
+                if (error) {
                     log.error('koshare', 'sending failed');
-                    log.error('koshare', err.stack!);
+                    log.error('koshare', error.stack!);
 
-                    reject(err);
-                } else {
-                    log.verbose('koshare', 'sent');
-
-                    this.resetKeepAlive();
-                    resolve();
+                    reject(error);
+                    return;
                 }
+
+                log.verbose('koshare', 'sent');
+
+                this.resetKeepAlive();
+                resolve();
             })
-        })
+        });
     }
 
     private async sendOperation<T>(type: PacketType, topic: string, body?: object): Promise<T> {
-        const id = this.id++;
-        const promise = new Promise<T>((resolve, reject) => {
-            this.operations.set(id, {
-                resolve: resolve as (value: unknown) => void,
-                reject,
-            });
-        });
-
-        await this.send(type, topic, { id, ...body });
+        const { id, promise } = this._operationManager.add<T>();
+        await this.send(type, topic, { id, body });
         return await promise;
     }
 
     public async subscribe<T extends object>(topic: string, handler: IncomingPacketHandler<T>): Promise<void> {
-        if (!this.handlers.has(topic)) {
-            this.handlers.set(topic, new Set());
-        }
-        this.handlers.get(topic)!.add(handler);
-
         await this.sendOperation<SubscribeResponse>(PacketType.Subscribe, topic);
+        this._handlers.add(topic, handler);
     }
 
     public unsubscribe(topic: string): Promise<void>;
     public unsubscribe<T extends object>(topic: string, handler: IncomingPacketHandler<T>): Promise<void>;
     public async unsubscribe<T extends object>(topic: string, handler?: IncomingPacketHandler<T>): Promise<void> {
-        if (!this.handlers.has(topic)) {
-            return;
+        if (typeof handler === 'undefined') {
+            this._handlers.removeKey(topic);
+        } else {
+            this._handlers.remove(topic, handler);
         }
 
-        if (typeof handler !== 'undefined') {
-            const set = this.handlers.get(topic)!;
-            set.delete(handler);
-            if (set.size !== 0) {
-                return;
-            }
+        if (this._handlers.get(topic).length === 0) {
+            await this.send(PacketType.Unsubscribe, topic);
         }
-
-        this.handlers.delete(topic);
-        return await this.send(PacketType.Unsubscribe, topic);
     }
 
     public boardcast<T extends object>(topic: string, body?: T): Promise<void> {
-        return this.send(PacketType.Boardcast, topic, body);
+        return this.send(PacketType.Boardcast, topic, { body });
     }
 
     public message<T extends object>(topic: string, destination: number, body?: T): Promise<void> {
-        return this.send(PacketType.Message, topic, { dst: destination, ...body });
+        return this.send(PacketType.Message, topic, { dst: destination, body });
     }
 
     public close() {
         log.verbose('koshare', 'closing');
 
         this.socket.close();
-        clearTimeout(this.keepAliveTimeout!);
+        clearTimeout(this._keepAliveTimeoutId!);
     }
 }

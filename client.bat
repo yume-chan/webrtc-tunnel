@@ -1,2 +1,2 @@
 @echo off
-npm run client
+npm run client -- dev
