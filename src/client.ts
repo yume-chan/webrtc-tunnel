@@ -7,6 +7,7 @@ import { prefix } from './common';
 import KoshareClient from './koshare-client';
 import { KoshareRtcSignalTransport } from './koshare-rtc-signal-transport';
 import RtcDataConnection from './rtc-data-connection';
+import { delay } from '../test/util';
 
 log.level = 'silly';
 
@@ -21,13 +22,25 @@ if (typeof serverId !== 'string') {
 let _connect: Promise<RtcDataConnection> | null = null;
 function connect(): Promise<RtcDataConnection> {
     async function core() {
-        return RtcDataConnection.connect(
-            serverId,
-            new RtcSignalClient(
-                clientId,
-                new KoshareRtcSignalTransport(
-                    await KoshareClient.connect(prefix))),
-            { iceServers: [{ urls: 'stun:stun.sipgate.net' }] });
+        while (true) {
+            try {
+                const connection = await RtcDataConnection.connect(
+                    serverId,
+                    new RtcSignalClient(
+                        clientId,
+                        new KoshareRtcSignalTransport(
+                            await KoshareClient.connect(prefix))),
+                    { iceServers: [{ urls: 'stun:stun.sipgate.net' }] });
+
+                connection.once('close', () => {
+                    _connect = null;
+                });
+
+                return connection;
+            } catch (error) {
+                await delay(1000);
+            }
+        }
     }
 
     if (_connect === null) {

@@ -17,7 +17,7 @@ export default class MultiMap<TKey, TValue> {
         this._map.get(key)!.push(value);
     }
 
-    public removeKey(key: TKey): boolean {
+    public clear(key: TKey): boolean {
         if (!this._map.has(key)) {
             return false;
         }

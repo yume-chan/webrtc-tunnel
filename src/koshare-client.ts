@@ -64,7 +64,7 @@ export default class KoshareClient {
                 log.error('koshare', err.stack!);
 
                 reject(err);
-            })
+            });
         })
     }
 
@@ -181,7 +181,7 @@ export default class KoshareClient {
     public unsubscribe<T extends object>(topic: string, handler: IncomingPacketHandler<T>): Promise<void>;
     public async unsubscribe<T extends object>(topic: string, handler?: IncomingPacketHandler<T>): Promise<void> {
         if (typeof handler === 'undefined') {
-            this._handlers.removeKey(topic);
+            this._handlers.clear(topic);
         } else {
             this._handlers.remove(topic, handler);
         }

@@ -92,7 +92,7 @@ export default class RtcDataConnection extends EventEmitter {
                             resolver.resolve();
                             break;
                         case 'failed':
-                            resolver.reject();
+                            resolver.reject(new Error('connection failed'));
                             break;
                     }
                 });
@@ -194,7 +194,13 @@ export default class RtcDataConnection extends EventEmitter {
             transfromConnectionStateChangeHandler(
                 this._connection,
                 (connectionState) => {
-                    log.warn('wrtc', 'connection state changed to %s', connectionState);
+                    switch (connectionState) {
+                        case 'failed':
+                            process.nextTick(() => {
+                                this.emit('close');
+                            })
+                            break;
+                    }
                 });
     }
 
@@ -203,14 +209,22 @@ export default class RtcDataConnection extends EventEmitter {
         return new RtcDataChannelStream(channel, this._channel);
     }
 
+    public on(event: 'close', listener: () => void): this;
     public on(event: 'data-channel-stream', listener: (stream: RtcDataChannelStream) => void): this;
     public on(event: string, listener: (...args: any) => any): this {
         return super.on(event, listener);
     }
 
+    public off(event: 'close', listener: () => void): this;
     public off(event: 'data-channel-stream', listener: (stream: RtcDataChannelStream) => void): this;
     public off(event: string, listener: (...args: any) => any): this {
         return super.off(event, listener);
+    }
+
+    public once(event: 'close', listener: () => void): this;
+    public once(event: 'data-channel-stream', listener: (stream: RtcDataChannelStream) => void): this;
+    public once(event: string, listener: (...args: any) => any): this {
+        return super.once(event, listener);
     }
 
     public close() {
