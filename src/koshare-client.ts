@@ -131,7 +131,11 @@ export default class KoshareClient {
         }
 
         this._keepAliveTimeoutId = setTimeout(async () => {
-            await this.send(PacketType.Error, 'keep-alive');
+            try {
+                await this.send(PacketType.Error, 'keep-alive');
+            } catch (e) {
+                // do nothing
+            }
         }, 60 * 1000);
     }
 
