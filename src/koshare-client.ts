@@ -136,7 +136,7 @@ export default class KoshareClient {
             } catch (e) {
                 // do nothing
             }
-        }, 60 * 1000);
+        }, this._keepAliveInterval);
     }
 
     private send(type: PacketType, topic: string, extra?: object): Promise<void> {
