@@ -19,7 +19,7 @@
     "npmlog": "^4.1.2",
     "ts-node": "^8.0.3",
     "typescript": "^3.4.3",
-    "wrtc": "^0.3.7",
+    "wrtc": "^0.4.0-beta1",
     "ws": "^6.2.1"
   },
   "devDependencies": {
