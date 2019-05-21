@@ -118,6 +118,7 @@ export default class RtcDataConnection extends EventEmitter {
 
         await resolver.promise;
 
+        signal.close();
         return new RtcDataConnection(connection, channel);
     }
 

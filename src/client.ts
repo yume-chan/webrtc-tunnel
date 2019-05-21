@@ -4,7 +4,7 @@ import log from 'npmlog';
 
 import { RtcSignalClient } from './rtc-signal';
 import { prefix } from './common';
-import KoshareClient from './koshare-client';
+import KoshareReconnectClient from './koshare-reconnect-client';
 import { KoshareRtcSignalTransport } from './koshare-rtc-signal-transport';
 import RtcDataConnection from './rtc-data-connection';
 import { delay } from '../test/util';
@@ -29,7 +29,7 @@ function connect(): Promise<RtcDataConnection> {
                     new RtcSignalClient(
                         clientId,
                         new KoshareRtcSignalTransport(
-                            await KoshareClient.connect(prefix))),
+                            await KoshareReconnectClient.connect(prefix))),
                     { iceServers: [{ urls: 'stun:stun.sipgate.net' }] });
 
                 connection.once('close', () => {

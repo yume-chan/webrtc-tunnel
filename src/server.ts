@@ -1,45 +1,37 @@
 import { randomBytes } from 'crypto';
-import { connect } from 'net';
 import log from 'npmlog';
 
 import { prefix } from './common';
-import KoshareClient from './koshare-client';
+import KoshareReconnectClient from './koshare-reconnect-client';
 import { KoshareRtcSignalTransport } from './koshare-rtc-signal-transport';
 import RtcDataConnection from './rtc-data-connection';
 import { RtcSignalServer } from './rtc-signal';
-
-import './proxy';
+import Socks5ServerConnection from './socks5-server';
 
 log.level = 'silly';
 
 const serverId = randomBytes(8).toString('base64');
+// const serverId = 'local';
 
 (async () => {
     await RtcDataConnection.listen(new RtcSignalServer(
         serverId,
         new KoshareRtcSignalTransport(
-            await KoshareClient.connect(prefix))),
+            await KoshareReconnectClient.connect(prefix))),
         (connection) => {
             connection.on('data-channel-stream', (client) => {
                 const label = client.label;
 
-                const remote = connect(1083, 'localhost', async () => {
-                    log.info('forward', 'connected to %s:%s', 'localhost', 1083);
-
-                    client.pipe(remote);
-                    remote.pipe(client);
+                const remote = new Socks5ServerConnection();
+                remote.on('data', (data) => {
+                    client.write(data);
+                });
+                remote.on('close', () => {
+                    client.end();
                 });
 
-                remote.on('error', (error) => {
-                    log.warn('forward', 'server %s error: %s', label, error.message);
-                    log.warn('forward', error.stack!);
-                });
-
-                client.on('error', (error) => {
-                    log.warn('forward', 'client %s error: %s', label, error.message);
-                    log.warn('forward', error.stack!);
-
-                    remote.end();
+                client.on('data', (data: Buffer) => {
+                    remote.process(data);
                 });
             });
         });

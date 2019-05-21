@@ -2,7 +2,7 @@ import log from 'npmlog';
 import WebSocket from 'ws';
 
 import AsyncOperationManager from './async-operation-manager';
-import MultiMap from './multi-map';
+import MultiMap, { ReadonlyMultiMap } from './multi-map';
 
 export enum PacketType {
     Error,
@@ -46,57 +46,84 @@ export type ExcludeCommon<T> = T extends { topic: string }
     ? Pick<T, Exclude<keyof T, 'topic' | 'dst'>>
     : T;
 
+export function connectWebSocket(endpoint: string): Promise<WebSocket> {
+    log.info('websocket', `connecting to ${endpoint}`);
+
+    return new Promise((resolve, reject) => {
+        function handleOpen() {
+            log.verbose('websocket', `connection to ${endpoint} established`);
+
+            socket.off('open', handleOpen);
+            socket.off('error', handleError);
+
+            resolve(socket);
+        }
+
+        function handleError(error: Error) {
+            log.error('websocket', `connection to ${endpoint} failed`);
+            log.error('websocket', error.stack!);
+
+            socket.off('open', handleOpen);
+            socket.off('error', handleError);
+
+            reject(error);
+        }
+
+        const socket = new WebSocket(endpoint);
+
+        socket.on("open", handleOpen);
+        socket.on("error", handleError);
+    });
+}
+
 export default class KoshareClient {
-    public static connect(prefix: string = '', endpoint: string = "ws://104.196.187.4:8888"): Promise<KoshareClient> {
-        log.verbose('koshare', 'connecting to endpoint: %s', endpoint);
-
-        return new Promise((resolve, reject) => {
-            const socket = new WebSocket(endpoint);
-
-            socket.on("open", () => {
-                log.verbose('koshare', 'connection established');
-
-                resolve(new KoshareClient(prefix, socket));
-            });
-
-            socket.on("error", (err) => {
-                log.error('koshare', 'connection failed');
-                log.error('koshare', err.stack!);
-
-                reject(err);
-            });
-        })
+    public static async connect(prefix: string = '', endpoint: string = "ws://104.196.187.4:8888"): Promise<KoshareClient> {
+        return new KoshareClient(prefix, await connectWebSocket(endpoint));
     }
 
     private _prefix: string;
     public get prefix(): string { return this._prefix; }
 
-    public socket: WebSocket;
+    protected _socket: WebSocket;
+    public get socket(): WebSocket { return this._socket; }
 
-    public alive: boolean;
+    protected _disconnected: boolean;
+    public get disconnected(): boolean { return this._disconnected; }
 
     private _operationManager: AsyncOperationManager = new AsyncOperationManager();
 
-    private _handlers: MultiMap<string, Function> = new MultiMap();
+    protected _handlers: MultiMap<string, Function> = new MultiMap();
+    public get handlers(): ReadonlyMultiMap<string, Function> { return this._handlers; }
 
     private _keepAliveInterval: number;
 
     private _keepAliveTimeoutId: NodeJS.Timeout | null = null;
 
-    private constructor(prefix: string, socket: WebSocket, keepAliveInterval = 60 * 1000) {
+    protected constructor(prefix: string, socket: WebSocket, keepAliveInterval = 60 * 1000) {
         this._prefix = prefix;
 
-        this.socket = socket;
-        this.alive = true;
+        this.initializeSocket(socket);
+        this._socket = socket;
+        this._disconnected = false;
 
-        this.socket.onerror = (err) => {
-            this.alive = false;
+        this._keepAliveInterval = keepAliveInterval;
+        this.resetKeepAlive();
+    }
+
+    protected initializeSocket(socket: WebSocket) {
+        socket.onerror = (err) => {
+            log.error('koshare', 'connection error:');
+            log.error('koshare', err.error.stack);
+
+            this._disconnected = true;
         };
-        this.socket.onclose = () => {
-            this.alive = false;
+        socket.onclose = () => {
+            log.info('koshare', 'connection closed');
+
+            this._disconnected = true;
         };
 
-        this.socket.onmessage = ({ data }) => {
+        socket.onmessage = ({ data }) => {
             const packet = JSON.parse(data as string) as Packet;
 
             log.verbose('koshare', 'received: %s', PacketType[packet.type] || 'UNKNOWN');
@@ -121,8 +148,6 @@ export default class KoshareClient {
             }
         }
 
-        this._keepAliveInterval = keepAliveInterval;
-        this.resetKeepAlive();
     }
 
     private resetKeepAlive() {
@@ -139,9 +164,9 @@ export default class KoshareClient {
         }, this._keepAliveInterval);
     }
 
-    private send(type: PacketType, topic: string, extra?: object): Promise<void> {
-        if (!this.alive) {
-            Promise.reject(new Error('the KoshareRouterClient instance is disconnected'));
+    protected send(type: PacketType, topic: string, extra?: object): Promise<void> {
+        if (this._disconnected) {
+            return Promise.reject(new Error('the KoshareRouterClient instance is disconnected'));
         }
 
         log.verbose('koshare', 'sending: %s %s', PacketType[type] || 'UNKNOWN', topic);
@@ -152,7 +177,7 @@ export default class KoshareClient {
         topic = this._prefix + topic;
 
         return new Promise((resolve, reject) => {
-            this.socket.send(JSON.stringify({ type, topic, ...extra }), (error) => {
+            this._socket.send(JSON.stringify({ type, topic, ...extra }), (error) => {
                 /* istanbul ignore if */
                 if (error) {
                     log.error('koshare', 'sending failed');
@@ -166,18 +191,21 @@ export default class KoshareClient {
 
                 this.resetKeepAlive();
                 resolve();
-            })
+            });
         });
     }
 
-    private async sendOperation<T>(type: PacketType, topic: string, body?: object): Promise<T> {
+    protected async sendOperation<T>(type: PacketType, topic: string, body?: object): Promise<T> {
         const { id, promise } = this._operationManager.add<T>();
         await this.send(type, topic, { id, body });
         return await promise;
     }
 
     public async subscribe<T extends object>(topic: string, handler: IncomingPacketHandler<T>): Promise<void> {
-        await this.sendOperation<SubscribeResponse>(PacketType.Subscribe, topic);
+        if (this._handlers.get(topic).length === 0) {
+            await this.sendOperation<SubscribeResponse>(PacketType.Subscribe, topic);
+        }
+
         this._handlers.add(topic, handler);
     }
 
@@ -206,7 +234,7 @@ export default class KoshareClient {
     public close() {
         log.verbose('koshare', 'closing');
 
-        this.socket.close();
+        this._socket.close();
         clearTimeout(this._keepAliveTimeoutId!);
     }
 }

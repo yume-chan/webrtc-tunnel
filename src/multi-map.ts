@@ -1,8 +1,13 @@
-export default class MultiMap<TKey, TValue> {
+export interface ReadonlyMultiMap<TKey, TValue> {
+    keys(): Iterable<TKey>;
+    get(key: TKey): ReadonlyArray<TValue>;
+}
+
+export default class MultiMap<TKey, TValue> implements ReadonlyMultiMap<TKey, TValue> {
     private _map: Map<TKey, TValue[]> = new Map();
 
-    public keys(): TKey[] {
-        return Array.from(this._map.keys());
+    public keys(): Iterable<TKey> {
+        return this._map.keys();
     }
 
     public get(key: TKey): TValue[] {

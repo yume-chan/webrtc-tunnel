@@ -1,7 +1,8 @@
 import log from 'npmlog';
 
 import { PromiseResolver } from '../src/async-operation-manager';
-import KoshareClient, { PacketType } from '../src/koshare-client';
+import { PacketType } from '../src/koshare-client';
+import KoshareReconnectClient from '../src/koshare-reconnect-client';
 import KoshareServer, { KoshareServerHooks } from './koshare-server';
 import { delay } from './util';
 
@@ -21,17 +22,17 @@ function spyObject<T extends object>(object: T): SpiedObject<T> {
     return result;
 }
 
-describe('koshare client', () => {
+describe('koshare reconnect client', () => {
     let hooks: KoshareServerHooks = {};
     let server!: KoshareServer;
-    let client!: KoshareClient;
-    let echo!: KoshareClient;
+    let client!: KoshareReconnectClient;
+    let echo!: KoshareReconnectClient;
 
     beforeEach(async () => {
         hooks = {};
-        server = await KoshareServer.create({ port: 8000 }, hooks);
-        client = await KoshareClient.connect('', 'ws://localhost:8000');
-        echo = await KoshareClient.connect('', 'ws://localhost:8000');
+        server = await KoshareServer.create({ port: 8001 }, hooks);
+        client = await KoshareReconnectClient.connect('', 'ws://localhost:8001');
+        echo = await KoshareReconnectClient.connect('', 'ws://localhost:8001');
     });
 
     afterEach(() => {
@@ -46,12 +47,6 @@ describe('koshare client', () => {
         if (typeof server !== 'undefined') {
             server.close();
         }
-    });
-
-    describe('connect', () => {
-        test('should throw error', () => {
-            expect(KoshareClient.connect('', 'ws://localhost:7999')).rejects.toThrow();
-        });
     });
 
     test('subscribe', async () => {
