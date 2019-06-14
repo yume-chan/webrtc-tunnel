@@ -51,6 +51,7 @@
             "sourceMaps": true,
             "args": [
                 "--runInBand",
+                "--setupTestFrameworkScriptFile=./scripts/setupTestFramework.js"
             ],
             "internalConsoleOptions": "openOnSessionStart"
         }

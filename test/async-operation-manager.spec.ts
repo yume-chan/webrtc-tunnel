@@ -8,8 +8,8 @@ describe('promise resolver', () => {
 
         resolver.resolve();
 
-        expect(resolver.promise).resolves.toBe(undefined);
         expect(resolver.state).toBe('resolved');
+        expect(resolver.promise).resolves.toBe(undefined);
     });
 
     test('resolve value', () => {
@@ -17,6 +17,7 @@ describe('promise resolver', () => {
 
         resolver.resolve(42);
 
+        expect(resolver.state).toBe('resolved');
         expect(resolver.promise).resolves.toBe(42);
     });
 
@@ -26,6 +27,7 @@ describe('promise resolver', () => {
         const message = Date.now().toString();
         resolver.reject(new Error(message));
 
+        expect(resolver.state).toBe('rejected');
         expect(resolver.promise).rejects.toHaveProperty('message', message);
     })
 });

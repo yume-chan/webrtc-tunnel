@@ -3,9 +3,12 @@ import log from 'npmlog';
 import { PromiseResolver } from '../src/async-operation-manager';
 import KoshareClient, { PacketType } from '../src/koshare-client';
 import KoshareServer, { KoshareServerHooks } from './koshare-server';
-import { delay } from './util';
+import { delay } from '../src/util';
+import { randomString, randomPort } from './util';
 
 log.level = 'silent';
+
+const noop = () => { };
 
 type SpiedObject<T> = {
     [key in keyof T]-?: Required<T>[key] extends (...args: infer A) => infer R ? jest.MockContext<R, A> : never;
@@ -21,17 +24,23 @@ function spyObject<T extends object>(object: T): SpiedObject<T> {
     return result;
 }
 
+interface Data {
+    data: string;
+}
+
 describe('koshare client', () => {
     let hooks: KoshareServerHooks = {};
     let server!: KoshareServer;
     let client!: KoshareClient;
     let echo!: KoshareClient;
 
+    const port = randomPort();
+
     beforeEach(async () => {
         hooks = {};
-        server = await KoshareServer.create({ port: 8000 }, hooks);
-        client = await KoshareClient.connect('', 'ws://localhost:8000');
-        echo = await KoshareClient.connect('', 'ws://localhost:8000');
+        server = await KoshareServer.create({ port }, hooks);
+        client = await KoshareClient.connect('', `ws://localhost:${port}`);
+        echo = await KoshareClient.connect('', `ws://localhost:${port}`);
     });
 
     afterEach(() => {
@@ -49,68 +58,94 @@ describe('koshare client', () => {
     });
 
     describe('connect', () => {
-        test('should throw error', () => {
-            expect(KoshareClient.connect('', 'ws://localhost:7999')).rejects.toThrow();
+        it('should success', async () => {
+            const prefix = randomString();
+            const client = await KoshareClient.connect(prefix, `ws://localhost:${port}`);
+
+            expect(client.prefix).toBe(prefix);
+            expect(client.socket).toBeTruthy();
+        })
+
+        it('should throw when error', () => {
+            return expect(KoshareClient.connect('', 'ws://localhost:7999')).rejects.toThrow();
         });
     });
 
-    test('subscribe', async () => {
-        hooks.packet = async (client, id, packet) => {
-            return packet;
-        };
-        const mock = spyObject(hooks);
+    describe('subscribe', () => {
+        it('should success', async () => {
+            hooks.packet = async (client, id, packet) => {
+                return packet;
+            };
+            const mock = spyObject(hooks);
 
-        const topic = Date.now().toString();
-        await client.subscribe(topic, () => { });
+            const topic = Date.now().toString();
+            await client.subscribe(topic, noop);
 
-        expect(mock.packet.calls.length).toBe(1);
-        expect(mock.packet.calls[0][2].type).toBe(PacketType.Subscribe);
-        expect(mock.packet.calls[0][2].topic).toBe(topic);
-    });
-
-    test('boardcast', async () => {
-        const topic = Date.now().toString();
-
-        let resolver = new PromiseResolver<void>();
-        await echo.subscribe(topic, () => {
-            resolver.resolve();
+            expect(mock.packet.calls.length).toBe(1);
+            expect(mock.packet.calls[0][2].type).toBe(PacketType.Subscribe);
+            expect(mock.packet.calls[0][2].topic).toBe(topic);
         });
 
-        hooks.packet = async (client, id, packet) => {
-            return packet;
-        };
-        const mock = spyObject(hooks);
+        it('should throw when disconnected', async () => {
+            client.close();
 
-        await client.boardcast(topic, { topic });
+            const topic = Date.now().toString();
+            return expect(client.subscribe(topic, noop)).rejects.toThrow();
+        })
+    });
 
-        await resolver.promise;
+    describe('boardcast', () => {
+        it('should success', async () => {
+            const topic = Date.now().toString();
+            const data = randomString();
 
-        expect(mock.packet.calls.length).toBe(1);
-        expect(mock.packet.calls[0][2].type).toBe(PacketType.Boardcast);
-        expect(mock.packet.calls[0][2].topic).toBe(topic);
-        expect((mock.packet.calls[0][2] as any).body).toEqual({ topic });
+            let resolver = new PromiseResolver<void>();
+            await echo.subscribe<Data>(topic, () => {
+                resolver.resolve();
+            });
+
+            hooks.packet = async (client, id, packet) => {
+                return packet;
+            };
+            const mock = spyObject(hooks);
+
+            await client.boardcast<Data>(topic, { data });
+
+            await resolver.promise;
+
+            expect(mock.packet.calls.length).toBe(1);
+            expect(mock.packet.calls[0][2].type).toBe(PacketType.Boardcast);
+            expect(mock.packet.calls[0][2].topic).toBe(topic);
+            expect((mock.packet.calls[0][2] as any).data).toEqual(data);
+        });
+
+        it('should throw if containing invalid body', () => {
+            const topic = Date.now().toString();
+            return expect(client.boardcast(topic, { topic })).rejects.toThrow();
+        });
     });
 
     test('message', async () => {
         const topic = Date.now().toString();
+        const data = randomString();
 
         let mock!: SpiedObject<KoshareServerHooks>;
         let resolver = new PromiseResolver<void>();
 
-        await echo.subscribe(topic, async (packet) => {
+        await echo.subscribe<Data>(topic, async (packet) => {
             hooks.packet = async (client, id, packet) => {
                 return packet;
             };
             mock = spyObject(hooks);
 
-            await echo!.message(topic, packet.src, packet.body);
+            await echo!.message<Data>(topic, packet.src, { data: packet.data });
         });
 
         await client.subscribe(topic, () => {
             resolver.resolve();
         });
 
-        await client.boardcast(topic, { topic });
+        await client.boardcast<Data>(topic, { data });
 
         await resolver.promise;
 
@@ -118,7 +153,7 @@ describe('koshare client', () => {
         expect(mock.packet.calls.length).toBe(1);
         expect(mock.packet.calls[0][2].type).toBe(PacketType.Message);
         expect(mock.packet.calls[0][2].topic).toBe(topic);
-        expect((mock.packet.calls[0][2] as any).body).toEqual({ topic });
+        expect((mock.packet.calls[0][2] as any).data).toEqual(data);
     });
 
     test('unsubscribe handler', async () => {

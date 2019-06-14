@@ -1,14 +1,15 @@
-import { randomBytes } from "crypto";
 import log from 'npmlog';
 
 import KoshareClient from "../src/koshare-client";
 import { KoshareRtcSignalTransport } from "../src/koshare-rtc-signal-transport";
 import RtcDataConnection from "../src/rtc-data-connection";
 import { RtcSignalClient, RtcSignalServer } from "../src/rtc-signal";
-import KoshareServer from "./koshare-server";
-import { delay } from "./util";
 import RtcDataChannelStream from "../src/rtc-data-channel-stream";
 import { PromiseResolver } from "../src/async-operation-manager";
+import { delay } from "../src/util";
+
+import KoshareServer from "./koshare-server";
+import { randomPort, randomString } from "./util";
 
 log.level = 'silent';
 
@@ -21,17 +22,19 @@ describe('rtc data connection', () => {
     let server!: RtcDataConnection;
     let client!: RtcDataConnection;
 
-    beforeEach(async (done) => {
-        koshareServer = await KoshareServer.create({ port: 8003 });
+    const port = randomPort();
 
-        serverId = randomBytes(8).toString('base64');
-        clientId = randomBytes(8).toString('base64');
+    beforeEach(async (done) => {
+        koshareServer = await KoshareServer.create({ port });
+
+        serverId = randomString();
+        clientId = randomString();
 
         await RtcDataConnection.listen(
             new RtcSignalServer(
                 serverId,
                 new KoshareRtcSignalTransport(
-                    await KoshareClient.connect('', 'ws://localhost:8003'))),
+                    await KoshareClient.connect('', `ws://localhost:${port}`))),
             (connection) => {
                 server = connection;
 
@@ -42,7 +45,7 @@ describe('rtc data connection', () => {
             new RtcSignalClient(
                 clientId,
                 new KoshareRtcSignalTransport(
-                    await KoshareClient.connect('', 'ws://localhost:8003'))));
+                    await KoshareClient.connect('', `ws://localhost:${port}`))));
     });
 
     afterEach(async () => {
@@ -89,14 +92,17 @@ describe('rtc data connection', () => {
     });
 
     test('send multiple', async () => {
-        let label = Date.now().toString();
+        const label = Date.now().toString();
+        const data = randomString();
 
-        const handleData = jest.fn((data: string) => {
-            expect(data).toBe(label);
+        const handleData = jest.fn((received: string) => {
+            expect(received).toBe(data);
         });
 
         let resolver = new PromiseResolver<RtcDataChannelStream>();
         server.on('data-channel-stream', (connection) => {
+            expect(connection).toHaveProperty('label', label);
+
             connection.setEncoding('utf8');
             resolver.resolve(connection);
         });
@@ -106,7 +112,7 @@ describe('rtc data connection', () => {
 
         const count = 10000;
         for (let i = 0; i < count; i++) {
-            local.write(label, 'utf8');
+            local.write(data, 'utf8');
         }
 
         await delay(100);

@@ -60,7 +60,6 @@ export default class RtcDataChannelStream extends Duplex {
     private _variable: ConditionVariable;
 
     private _remoteFull: boolean = false;
-    private _localFullOld: boolean = false;
     private _localFull: boolean = false;
 
     private _buffer: Buffer[] = [];
@@ -119,7 +118,7 @@ export default class RtcDataChannelStream extends Duplex {
     }
 
     private sendControlMessage(type: 'empty' | 'full') {
-        this._dataChannel.send(JSON.stringify({
+        this._controlChannel.send(JSON.stringify({
             type,
             label: this._dataChannel.label,
         }));
@@ -129,20 +128,18 @@ export default class RtcDataChannelStream extends Duplex {
         try {
             while (this._buffer.length) {
                 if (!this.push(this._buffer.shift())) {
-                    this._localFull = true;
-                    if (!this._localFullOld) {
+                    if (!this._localFull) {
                         this.sendControlMessage('full');
+                        this._localFull = true;
                     }
-                    this._localFullOld = this._localFull;
                     return;
                 }
             }
 
-            this._localFull = false;
-            if (this._localFullOld) {
+            if (this._localFull) {
                 this.sendControlMessage('empty');
+                this._localFull = false;
             }
-            this._localFullOld = this._localFull;
         } catch (error) {
             process.nextTick(() => {
                 this.emit('error', error);

@@ -1,10 +1,13 @@
-import { randomBytes } from "crypto";
+import log from 'npmlog';
 
 import KoshareClient from "../src/koshare-client";
 import { KoshareRtcSignalTransport } from "../src/koshare-rtc-signal-transport";
 import KoshareServer from "./koshare-server";
 import { RtcSignalServer, RtcSignalClient, PingMessage } from "../src/rtc-signal";
-import { createRtcIceCandidate, delay } from "./util";
+import { createRtcIceCandidate, randomPort, randomString } from "./util";
+import { delay } from "../src/util";
+
+log.level = 'silent';
 
 describe('rtc signal', () => {
     let koshareServer!: KoshareServer;
@@ -15,20 +18,22 @@ describe('rtc signal', () => {
     let server!: RtcSignalServer;
     let client!: RtcSignalClient;
 
-    beforeEach(async () => {
-        koshareServer = await KoshareServer.create({ port: 8002 });
+    const port = randomPort();
 
-        serverId = randomBytes(8).toString('base64');
-        clientId = randomBytes(8).toString('base64');
+    beforeEach(async () => {
+        koshareServer = await KoshareServer.create({ port });
+
+        serverId = randomString();
+        clientId = randomString();
 
         server = new RtcSignalServer(
             serverId,
             new KoshareRtcSignalTransport(
-                await KoshareClient.connect('', 'ws://localhost:8002')));
+                await KoshareClient.connect('', `ws://localhost:${port}`)));
         client = new RtcSignalClient(
             clientId,
             new KoshareRtcSignalTransport(
-                await KoshareClient.connect('', 'ws://localhost:8002')));
+                await KoshareClient.connect('', `ws://localhost:${port}`)));
     });
 
     afterEach(async () => {

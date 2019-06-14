@@ -1,8 +1,4 @@
-export function delay(time: number): Promise<void> {
-    return new Promise<void>(resolve => {
-        setTimeout(resolve, time);
-    });
-}
+import { randomBytes } from "crypto";
 
 export function createRtcIceCandidate(): RTCIceCandidate {
     const candidate = Date.now().toString();
@@ -28,4 +24,12 @@ export function createRtcIceCandidate(): RTCIceCandidate {
             };
         },
     };
+}
+
+export function randomString() {
+    return randomBytes(20).toString('hex');
+}
+
+export function randomPort() {
+    return 9000 + Math.floor(Math.random() * 1000);
 }

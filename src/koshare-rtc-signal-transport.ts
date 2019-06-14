@@ -54,24 +54,21 @@ export class KoshareRtcSignalTransport implements RtcSignalTransport {
             return;
         }
 
-        this.addIdMapping(packet.src, packet.body.sourceId);
+        this.addIdMapping(packet.src, packet.sourceId);
         for (const handler of this._pingHandlers) {
-            handler(packet.body);
+            handler(packet);
         }
     }
 
     private handlePongMessage = (packet: IncomingPacket<OperationMessage<PongMessage>>): void => {
         const {
             src,
-            body,
-            body: {
-                sourceId,
-                id,
-            },
+            sourceId,
+            id,
         } = packet;
 
         this.addIdMapping(src, sourceId);
-        this._operationManager.resolve(id, body);
+        this._operationManager.resolve(id, packet);
     }
 
     private handleIceCandidateMessage = (packet: IncomingPacket<IceCandidateMessage>): void => {
@@ -81,7 +78,7 @@ export class KoshareRtcSignalTransport implements RtcSignalTransport {
         }
 
         for (const handler of this._iceCandidateHandlers) {
-            handler(packet.body);
+            handler(packet);
         }
     }
 

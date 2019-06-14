@@ -28,7 +28,7 @@ export interface IncomingMessage {
     src: number;
 }
 
-export type IncomingPacket<T> = { body: T } & (IncomingMessage | IncomingBoardcast);
+export type IncomingPacket<T> = T & (IncomingMessage | IncomingBoardcast);
 
 type IncomingPacketHandler<T> = (message: IncomingPacket<T>) => void;
 
@@ -102,7 +102,7 @@ export default class KoshareClient {
     protected constructor(prefix: string, socket: WebSocket, keepAliveInterval = 60 * 1000) {
         this._prefix = prefix;
 
-        this.initializeSocket(socket);
+        this.prepareSocket(socket);
         this._socket = socket;
         this._disconnected = false;
 
@@ -110,20 +110,22 @@ export default class KoshareClient {
         this.resetKeepAlive();
     }
 
-    protected initializeSocket(socket: WebSocket) {
-        socket.onerror = (err) => {
+    protected prepareSocket(socket: WebSocket) {
+        socket.on('error', (err) => {
             log.error('koshare', 'connection error:');
-            log.error('koshare', err.error.stack);
+            log.error('koshare', err.stack!);
 
             this._disconnected = true;
-        };
-        socket.onclose = () => {
+        });
+
+        socket.on('close', () => {
             log.info('koshare', 'connection closed');
 
             this._disconnected = true;
-        };
+            socket.terminate();
+        });
 
-        socket.onmessage = ({ data }) => {
+        socket.on('message', (data) => {
             const packet = JSON.parse(data as string) as Packet;
 
             log.verbose('koshare', 'received: %s', PacketType[packet.type] || 'UNKNOWN');
@@ -139,6 +141,7 @@ export default class KoshareClient {
                     }
                     break;
                 case PacketType.Subscribe:
+                    /* istanbul ignore if */
                     if (typeof packet.error === 'string') {
                         this._operationManager.reject(packet.id, new Error(packet.error));
                     } else {
@@ -146,8 +149,7 @@ export default class KoshareClient {
                     }
                     break;
             }
-        }
-
+        });
     }
 
     private resetKeepAlive() {
@@ -164,20 +166,35 @@ export default class KoshareClient {
         }, this._keepAliveInterval);
     }
 
-    protected send(type: PacketType, topic: string, extra?: object): Promise<void> {
+    protected checkMessageBody(forbiddenKeys: string[], body: object | undefined): void {
+        if (typeof body !== 'object' || body === null) {
+            return;
+        }
+
+        for (const key of forbiddenKeys) {
+            if (key in body) {
+                throw new TypeError(`key "${key}" is forbidden in message body`);
+            }
+        }
+    }
+
+    protected send(type: PacketType, topic: string, body?: object): Promise<void> {
         if (this._disconnected) {
             return Promise.reject(new Error('the KoshareRouterClient instance is disconnected'));
         }
 
         log.verbose('koshare', 'sending: %s %s', PacketType[type] || 'UNKNOWN', topic);
-        if (typeof extra === 'object') {
-            log.silly('koshare', '%j', extra);
+        if (typeof body === 'object') {
+            log.silly('koshare', '%j', body);
         }
 
         topic = this._prefix + topic;
 
         return new Promise((resolve, reject) => {
-            this._socket.send(JSON.stringify({ type, topic, ...extra }), (error) => {
+            const forbiddenKeys = ['type', 'topic'];
+            this.checkMessageBody(forbiddenKeys, body);
+
+            this._socket.send(JSON.stringify({ ...body, type, topic, }), (error) => {
                 /* istanbul ignore if */
                 if (error) {
                     log.error('koshare', 'sending failed');
@@ -196,8 +213,11 @@ export default class KoshareClient {
     }
 
     protected async sendOperation<T>(type: PacketType, topic: string, body?: object): Promise<T> {
+        const forbiddenKeys = ['id'];
+        this.checkMessageBody(forbiddenKeys, body);
+
         const { id, promise } = this._operationManager.add<T>();
-        await this.send(type, topic, { id, body });
+        await this.send(type, topic, { id, ...body });
         return await promise;
     }
 
@@ -224,15 +244,17 @@ export default class KoshareClient {
     }
 
     public boardcast<T extends object>(topic: string, body?: T): Promise<void> {
-        return this.send(PacketType.Boardcast, topic, { body });
+        return this.send(PacketType.Boardcast, topic, body);
     }
 
     public message<T extends object>(topic: string, destination: number, body?: T): Promise<void> {
-        return this.send(PacketType.Message, topic, { dst: destination, body });
+        return this.send(PacketType.Message, topic, { dst: destination, ...body });
     }
 
     public close() {
         log.verbose('koshare', 'closing');
+
+        this._disconnected = true;
 
         this._socket.close();
         clearTimeout(this._keepAliveTimeoutId!);

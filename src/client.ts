@@ -62,6 +62,7 @@ const server = createServer(async (client) => {
     remote.on('error', (error) => {
         log.warn('forward', 'server %s error: %s', label, error.message);
         log.warn('forward', error.stack!);
+
         client.end();
     });
 

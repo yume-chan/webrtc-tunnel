@@ -56,7 +56,7 @@ export default class KoshareServer {
         const resolver = new PromiseResolver<void>();
 
         const result = new KoshareServer(options, hooks);
-        result._server.on('listening', () => {
+        result._socket.on('listening', () => {
             resolver.resolve();
         });
 
@@ -64,7 +64,8 @@ export default class KoshareServer {
         return result;
     }
 
-    private _server: Server;
+    private _socket: Server;
+    public get socket(): Server { return this._socket; }
 
     private _id: number = 0;
 
@@ -75,8 +76,8 @@ export default class KoshareServer {
     private _hook: KoshareServerHooks | null = null;
 
     private constructor(options?: ServerOptions, hook: KoshareServerHooks | null = null) {
-        this._server = new Server(options);
-        this._server.on('connection', this.handleClient);
+        this._socket = new Server(options);
+        this._socket.on('connection', this.handleClient);
 
         this._hook = hook;
     }
@@ -237,6 +238,6 @@ export default class KoshareServer {
     }
 
     public close() {
-        this._server.close();
+        this._socket.close();
     }
 }
