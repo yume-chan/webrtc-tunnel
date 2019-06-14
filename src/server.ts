@@ -17,7 +17,7 @@ const serverId = randomBytes(8).toString('base64');
     await RtcDataConnection.listen(new RtcSignalServer(
         serverId,
         new KoshareRtcSignalTransport(
-            await KoshareReconnectClient.connect(prefix))),
+            await KoshareReconnectClient.connect(prefix, 'wss://chensi.moe/koshare'))),
         (connection) => {
             connection.on('data-channel-stream', (client) => {
                 const label = client.label;

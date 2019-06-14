@@ -29,7 +29,7 @@ function connect(): Promise<RtcDataConnection> {
                     new RtcSignalClient(
                         clientId,
                         new KoshareRtcSignalTransport(
-                            await KoshareReconnectClient.connect(prefix))),
+                            await KoshareReconnectClient.connect(prefix, 'wss://chensi.moe/koshare'))),
                     { iceServers: [{ urls: 'stun:stun.sipgate.net' }] });
 
                 connection.once('close', () => {
