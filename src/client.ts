@@ -7,7 +7,7 @@ import { prefix } from './common';
 import KoshareReconnectClient from './koshare-reconnect-client';
 import { KoshareRtcSignalTransport } from './koshare-rtc-signal-transport';
 import RtcDataConnection from './rtc-data-connection';
-import { delay } from '../test/util';
+import { delay } from './util';
 
 log.level = 'silly';
 
