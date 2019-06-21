@@ -4,7 +4,7 @@ import MultiMap from './multi-map';
 export type Omit<T, K extends keyof T> = Pick<T, Exclude<keyof T, K>>;
 
 export interface RtcSignalTransport {
-    boardcastPing(message: PingMessage): Promise<PongMessage>;
+    broadcastPing(message: PingMessage): Promise<PongMessage>;
 
     addPingHandler(handler: (message: PingMessage) => void): Promise<void>;
 
@@ -84,7 +84,7 @@ export class RtcSignalClient extends RtcSignalBase {
 
     public async ping(serverId: string, offer: RTCSessionDescriptionInit): Promise<PongMessage> {
         await this._addIceCandidateHandler.get();
-        return await this._transportation.boardcastPing({ sourceId: this._id, destinationId: serverId, offer });
+        return await this._transportation.broadcastPing({ sourceId: this._id, destinationId: serverId, offer });
     }
 }
 

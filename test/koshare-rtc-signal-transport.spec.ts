@@ -1,9 +1,8 @@
 import log from 'npmlog';
+import { KoshareClient, KoshareServer } from "@yume-chan/koshare-router";
 
-import KoshareClient from "../src/koshare-client";
 import { KoshareRtcSignalTransport } from "../src/koshare-rtc-signal-transport";
 import { PingMessage } from "../src/rtc-signal";
-import KoshareServer from "./koshare-server";
 import { createRtcIceCandidate, randomPort } from "./util";
 import { randomString } from "./util";
 
@@ -27,9 +26,9 @@ describe('koshare rtc signal transportation', () => {
         clientId = randomString();
 
         server = new KoshareRtcSignalTransport(
-            await KoshareClient.connect('', `ws://localhost:${port}`));
+            await KoshareClient.connect(`ws://localhost:${port}`));
         client = new KoshareRtcSignalTransport(
-            await KoshareClient.connect('', `ws://localhost:${port}`));
+            await KoshareClient.connect(`ws://localhost:${port}`));
     });
 
     afterEach(async () => {
@@ -58,7 +57,7 @@ describe('koshare rtc signal transportation', () => {
         await server.addPingHandler(handlePing);
 
         const offer: RTCSessionDescriptionInit = { type: 'offer', sdp: Date.now().toString() };
-        const pong = await client.boardcastPing({ sourceId: clientId, destinationId: serverId, offer });
+        const pong = await client.broadcastPing({ sourceId: clientId, destinationId: serverId, offer });
 
         expect(handlePing).toBeCalledTimes(1);
         expect(handlePing.mock.calls[0][0].sourceId).toBe(clientId);
@@ -90,7 +89,7 @@ describe('koshare rtc signal transportation', () => {
         });
 
         const offer: RTCSessionDescriptionInit = { type: 'offer', sdp: Date.now().toString() };
-        await client.boardcastPing({ sourceId: clientId, destinationId: serverId, offer });
+        await client.broadcastPing({ sourceId: clientId, destinationId: serverId, offer });
 
         await client.sendIceCandidate({ sourceId: clientId, destinationId: serverId, candidate });
     });
@@ -121,6 +120,6 @@ describe('koshare rtc signal transportation', () => {
         });
 
         const offer: RTCSessionDescriptionInit = { type: 'offer', sdp: Date.now().toString() };
-        await client.boardcastPing({ sourceId: clientId, destinationId: serverId, offer });
+        await client.broadcastPing({ sourceId: clientId, destinationId: serverId, offer });
     });
 });

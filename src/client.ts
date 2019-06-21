@@ -1,10 +1,10 @@
 import { randomBytes } from 'crypto';
 import { createServer } from 'net';
+import { KoshareReconnectClient } from '@yume-chan/koshare-router';
 import log from 'npmlog';
 
 import { RtcSignalClient } from './rtc-signal';
 import { prefix } from './common';
-import KoshareReconnectClient from './koshare-reconnect-client';
 import { KoshareRtcSignalTransport } from './koshare-rtc-signal-transport';
 import RtcDataConnection from './rtc-data-connection';
 import { delay } from './util';
@@ -29,7 +29,7 @@ function connect(): Promise<RtcDataConnection> {
                     new RtcSignalClient(
                         clientId,
                         new KoshareRtcSignalTransport(
-                            await KoshareReconnectClient.connect(prefix, 'wss://chensi.moe/koshare'))),
+                            await KoshareReconnectClient.connect('wss://chensi.moe/koshare', prefix))),
                     { iceServers: [{ urls: 'stun:stun.sipgate.net' }] });
 
                 connection.once('close', () => {

@@ -1,6 +1,6 @@
 import log from 'npmlog';
+import { KoshareClient, KoshareServer } from "@yume-chan/koshare-router";
 
-import KoshareClient from "../src/koshare-client";
 import { KoshareRtcSignalTransport } from "../src/koshare-rtc-signal-transport";
 import RtcDataConnection from "../src/rtc-data-connection";
 import { RtcSignalClient, RtcSignalServer } from "../src/rtc-signal";
@@ -8,7 +8,6 @@ import RtcDataChannelStream from "../src/rtc-data-channel-stream";
 import { PromiseResolver } from "../src/async-operation-manager";
 import { delay } from "../src/util";
 
-import KoshareServer from "./koshare-server";
 import { randomPort, randomString } from "./util";
 
 log.level = 'silent';
@@ -34,7 +33,7 @@ describe('rtc data connection', () => {
             new RtcSignalServer(
                 serverId,
                 new KoshareRtcSignalTransport(
-                    await KoshareClient.connect('', `ws://localhost:${port}`))),
+                    await KoshareClient.connect(`ws://localhost:${port}`))),
             (connection) => {
                 server = connection;
 
@@ -45,7 +44,7 @@ describe('rtc data connection', () => {
             new RtcSignalClient(
                 clientId,
                 new KoshareRtcSignalTransport(
-                    await KoshareClient.connect('', `ws://localhost:${port}`))));
+                    await KoshareClient.connect(`ws://localhost:${port}`))));
     });
 
     afterEach(async () => {

@@ -1,5 +1,6 @@
+import { KoshareClient, PacketType, ForwardPacket } from "@yume-chan/koshare-router";
+
 import AsyncOperationManager from "./async-operation-manager";
-import KoshareClient, { IncomingPacket, PacketType } from "./koshare-client";
 import Lazy from "./lazy";
 import { IceCandidateMessage, PingMessage, PongMessage, RtcSignalTransport } from "./rtc-signal";
 
@@ -49,8 +50,8 @@ export class KoshareRtcSignalTransport implements RtcSignalTransport {
         this._signalIdToKoshareId.set(signalId, koshareId);
     }
 
-    private handlePingMessage = (packet: IncomingPacket<OperationMessage<PingMessage>>): void => {
-        if (packet.type !== PacketType.Boardcast) {
+    private handlePingMessage = (packet: ForwardPacket<OperationMessage<PingMessage>>): void => {
+        if (packet.type !== PacketType.Broadcast) {
             return;
         }
 
@@ -60,7 +61,7 @@ export class KoshareRtcSignalTransport implements RtcSignalTransport {
         }
     }
 
-    private handlePongMessage = (packet: IncomingPacket<OperationMessage<PongMessage>>): void => {
+    private handlePongMessage = (packet: ForwardPacket<OperationMessage<PongMessage>>): void => {
         const {
             src,
             sourceId,
@@ -71,7 +72,7 @@ export class KoshareRtcSignalTransport implements RtcSignalTransport {
         this._operationManager.resolve(id, packet);
     }
 
-    private handleIceCandidateMessage = (packet: IncomingPacket<IceCandidateMessage>): void => {
+    private handleIceCandidateMessage = (packet: ForwardPacket<IceCandidateMessage>): void => {
         const remoteId = this._koshareIdToSignalId.get(packet.src);
         if (remoteId === undefined) {
             return;
@@ -82,11 +83,11 @@ export class KoshareRtcSignalTransport implements RtcSignalTransport {
         }
     }
 
-    public async boardcastPing(message: PingMessage): Promise<PongMessage> {
+    public async broadcastPing(message: PingMessage): Promise<PongMessage> {
         await Promise.all([this._subscribePong.get(), this._subscribeIceCandidate.get()]);
 
         const { id, promise } = this._operationManager.add<PongMessage>();
-        await this._koshareClient.boardcast(KoshareRtcSignalTransportTopics.Ping, { id, ...message });
+        await this._koshareClient.broadcast(KoshareRtcSignalTransportTopics.Ping, { id, ...message });
         return await promise;
     }
 
