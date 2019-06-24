@@ -20,7 +20,7 @@ describe('rtc signal', () => {
     const port = randomPort();
 
     beforeEach(async () => {
-        koshareServer = await KoshareServer.create({ port });
+        koshareServer = await KoshareServer.listen({ port });
 
         serverId = randomString();
         clientId = randomString();

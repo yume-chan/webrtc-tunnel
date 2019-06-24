@@ -1,8 +1,10 @@
 import { EventEmitter } from 'events';
+
 import log from 'npmlog';
 import { RTCPeerConnection } from 'wrtc';
 
-import { PromiseResolver } from './async-operation-manager';
+import { PromiseResolver } from '@yume-chan/async-operation-manager';
+
 import RtcDataChannelStream from './rtc-data-channel-stream';
 import { RtcSignalClient, RtcSignalServer } from "./rtc-signal";
 

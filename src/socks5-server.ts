@@ -1,5 +1,6 @@
-import * as net from 'net';
+import net from 'net';
 import { EventEmitter } from 'events';
+
 import log from 'npmlog';
 
 export enum Socks5ConnectionState {

@@ -1,8 +1,10 @@
 import { randomBytes } from 'crypto';
+
 import log from 'npmlog';
 
-import { prefix } from './common';
 import { KoshareReconnectClient } from '@yume-chan/koshare-router';
+
+import { prefix } from './common';
 import { KoshareRtcSignalTransport } from './koshare-rtc-signal-transport';
 import RtcDataConnection from './rtc-data-connection';
 import { RtcSignalServer } from './rtc-signal';

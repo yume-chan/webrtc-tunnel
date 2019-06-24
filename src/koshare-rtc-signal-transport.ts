@@ -1,6 +1,6 @@
+import AsyncOperationManager from "@yume-chan/async-operation-manager";
 import { KoshareClient, PacketType, ForwardPacket } from "@yume-chan/koshare-router";
 
-import AsyncOperationManager from "./async-operation-manager";
 import Lazy from "./lazy";
 import { IceCandidateMessage, PingMessage, PongMessage, RtcSignalTransport } from "./rtc-signal";
 
