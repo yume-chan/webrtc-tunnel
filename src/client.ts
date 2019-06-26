@@ -53,25 +53,32 @@ function connect(): Promise<RtcDataConnection> {
 const server = createServer(async (client) => {
     const connection = await connect();
 
-    const label = `${client.remoteAddress}:${client.remotePort}`;
-    const remote = await connection.createChannelStream(label);
+    try {
+        const label = `${client.remoteAddress}:${client.remotePort}`;
+        const remote = await connection.createChannelStream(label);
 
-    remote.pipe(client);
-    client.pipe(remote);
+        remote.pipe(client);
+        client.pipe(remote);
 
-    remote.on('error', (error) => {
-        log.warn('forward', 'server %s error: %s', label, error.message);
-        log.warn('forward', error.stack!);
+        remote.on('error', (error) => {
+            log.warn('forward', 'server %s error: %s', label, error.message);
+            log.warn('forward', error.stack!);
+
+            client.end();
+        });
+
+        client.on('error', (error) => {
+            log.warn('forward', 'client %s error: %s', label, error.message);
+            log.warn('forward', error.stack!);
+
+            remote.end();
+        });
+    } catch (e) {
+        connection.close();
+        _connect = null;
 
         client.end();
-    });
-
-    client.on('error', (error) => {
-        log.warn('forward', 'client %s error: %s', label, error.message);
-        log.warn('forward', error.stack!);
-
-        remote.end();
-    });
+    }
 });
 
 server.on('error', (err) => {

@@ -18,6 +18,7 @@
     "@types/ws": "^6.0.1",
     "@yume-chan/async-operation-manager": "^1.0.1",
     "@yume-chan/koshare-router": "^1.0.3",
+    "@yume-chan/multi-map": "^1.0.2",
     "npmlog": "^4.1.2",
     "ts-node": "^8.0.3",
     "typescript": "^3.4.3",

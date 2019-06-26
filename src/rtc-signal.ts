@@ -1,5 +1,6 @@
+import MultiMap from '@yume-chan/multi-map';
+
 import Lazy from './lazy';
-import MultiMap from './multi-map';
 
 export type Omit<T, K extends keyof T> = Pick<T, Exclude<keyof T, K>>;
 
@@ -65,7 +66,7 @@ abstract class RtcSignalBase {
     }
 
     public removeIceCandidateListener(remoteId: string, handler: IceCandidateHandler): void {
-        this._iceCandidateHandlers.remove(remoteId, handler);
+        this._iceCandidateHandlers.delete(remoteId, handler);
     }
 
     public async sendIceCandidate(remoteId: string, candidate: RTCIceCandidate): Promise<void> {
