@@ -1,8 +1,11 @@
 {
-  "name": "tunnel",
+  "name": "@yume-chan/webrtc-tunnel",
   "version": "1.0.0",
-  "description": "",
+  "description": "use WebRTC to create tunnels even when peers are behind NAT",
   "main": "index.js",
+  "directories": {
+    "test": "test"
+  },
   "scripts": {
     "server": "ts-node --files src/server",
     "client": "ts-node --files src/client",
@@ -12,6 +15,9 @@
   "keywords": [],
   "author": "Simon Chan",
   "license": "MIT",
+  "bugs": {
+    "url": "https://github.com/yume-chan/webrtc-tunnel/issues"
+  },
   "dependencies": {
     "@types/node": "^12.0.8",
     "@types/npmlog": "^4.1.1",
@@ -25,6 +31,7 @@
     "wrtc": "^0.4.1",
     "ws": "^7.0.0"
   },
+  "homepage": "https://github.com/yume-chan/webrtc-tunnel#readme",
   "devDependencies": {
     "@types/jest": "^24.0.14",
     "jest": "^24.8.0",
