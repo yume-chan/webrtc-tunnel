@@ -79,10 +79,16 @@ export interface Socks5CommandHandlerConstructor {
 export class Socks5ConnectCommandHandler implements Socks5CommandHandler {
     private _emitter: EventEmitter;
 
+    private _address: string;
+    private _port: number;
+
     private _socket: net.Socket;
 
     constructor(emitter: EventEmitter, address: string, port: number) {
         this._emitter = emitter;
+
+        this._address = address;
+        this._port = port;
 
         this._socket = net.connect(port, address);
         this._socket.on('connect', () => {
@@ -100,7 +106,7 @@ export class Socks5ConnectCommandHandler implements Socks5CommandHandler {
             this._emitter.emit('data', response);
         });
         this._socket.on('data', (data) => {
-            // log.verbose('socks5', `received ${data.byteLength} bytes from ${this._address}:${this._port}`);
+            log.verbose('socks5', `received ${data.byteLength} bytes from ${address}:${port}`);
 
             this._emitter.emit('data', data);
         });
@@ -113,7 +119,7 @@ export class Socks5ConnectCommandHandler implements Socks5CommandHandler {
     }
 
     process(data: Buffer): void {
-        // log.verbose('socks5', `fowarding ${data.byteLength} bytes to ${this._address}:${this._port}`);
+        log.verbose('socks5', `fowarding ${data.byteLength} bytes to ${this._address}:${this._port}`);
 
         this._socket.write(data);
     }
@@ -202,6 +208,7 @@ export default class Socks5ServerConnection {
                 switch (command) {
                     case Socks5Command.Connect:
                         this._handler = new Socks5ConnectCommandHandler(this._emitter, address, port);
+                        this._state = Socks5ConnectionState.Relay;
                         break;
                     default:
                         this._emitter.emit('close');

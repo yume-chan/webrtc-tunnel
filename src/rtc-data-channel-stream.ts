@@ -114,7 +114,7 @@ export default class RtcDataChannelStream extends Duplex {
             process.nextTick(() => {
                 this.emit('error', error);
             });
-        })
+        });
     }
 
     private sendControlMessage(type: 'empty' | 'full') {
