@@ -37,9 +37,9 @@ describe('rtc data connection', () => {
                     await KoshareClient.connect(`ws://localhost:${port}`))),
             (connection) => {
                 server = connection;
-
                 done();
             });
+
         client = await RtcDataConnection.connect(
             serverId,
             new RtcSignalClient(
@@ -75,20 +75,19 @@ describe('rtc data connection', () => {
     });
 
     test('send once', async (done) => {
-        let label = Date.now().toString();
+        let content = randomString();
 
         server.on('data-channel-stream', (remote) => {
             remote.setEncoding('utf8');
 
             remote.on('data', (data) => {
-                expect(data).toBe(label);
-
+                expect(data).toBe(content);
                 done();
             });
         });
 
-        const local = await client.createChannelStream(label);
-        local.write(label, 'utf8');
+        const local = await client.createChannelStream(randomString());
+        local.write(content, 'utf8');
     });
 
     test('send multiple', async () => {
