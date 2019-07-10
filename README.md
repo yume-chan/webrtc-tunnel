@@ -1,6 +1,7 @@
 # WebRTC Tunnel
 
 [![travis-ci](https://travis-ci.org/yume-chan/webrtc-tunnel.svg?branch=master)](https://travis-ci.org/yume-chan/webrtc-tunnel)
+[![Greenkeeper badge](https://badges.greenkeeper.io/yume-chan/webrtc-tunnel.svg)](https://greenkeeper.io/)
 
 WebRTC uses ICE to connect to remote peers, which supports NAT traversal pretty well.
 
