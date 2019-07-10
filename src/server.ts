@@ -35,6 +35,9 @@ const serverId = randomBytes(8).toString('base64');
                 client.on('data', (data: Buffer) => {
                     remote.process(data);
                 });
+                client.on('close', () => {
+                    remote.close();
+                });
             });
         });
 

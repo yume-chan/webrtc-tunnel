@@ -1,13 +1,15 @@
 import net from 'net';
 import { EventEmitter } from 'events';
 
+import * as ipaddr from 'ipaddr.js';
+
 import log from 'npmlog';
 
 export enum Socks5ConnectionState {
     Handshake,
     Authentication,
-    Ready,
-    Connect,
+    WaitCommand,
+    Relay,
 }
 
 export enum Socks5AuthenticateMethod {
@@ -55,22 +57,81 @@ class BufferReader {
         this._offset = end;
         return result;
     }
+
+    public readBuffer(length: number): Buffer {
+        const end = this._offset + length;
+        const result = this._buffer.slice(this._offset, end);
+        this._offset = end;
+        return result;
+    }
 }
 
+export interface Socks5CommandHandler {
+    process(data: Buffer): void;
+
+    close(): void;
+}
+
+export interface Socks5CommandHandlerConstructor {
+    constructor(emitter: EventEmitter, address: string, port: number): Socks5CommandHandler;
+}
+
+export class Socks5ConnectCommandHandler implements Socks5CommandHandler {
+    private _emitter: EventEmitter;
+
+    private _socket: net.Socket;
+
+    constructor(emitter: EventEmitter, address: string, port: number) {
+        this._emitter = emitter;
+
+        this._socket = net.connect(port, address);
+        this._socket.on('connect', () => {
+            log.info('socks5', `connected to ${address}:${port}`);
+
+            const localAddress = ipaddr.process(this._socket.localAddress).toByteArray();
+            const localPort = this._socket.localPort;
+
+            const response = Buffer.alloc(6 + localAddress.length);
+            response.writeUInt8(0x05, 0);
+            response.writeUInt8(0x00, 1);
+            response.writeUInt8(localAddress.length === 4 ? 0x01 : 0x04, 3);
+            response.set(localAddress, 4);
+            response.writeUInt16BE(localPort, 4 + localAddress.length);
+            this._emitter.emit('data', response);
+        });
+        this._socket.on('data', (data) => {
+            // log.verbose('socks5', `received ${data.byteLength} bytes from ${this._address}:${this._port}`);
+
+            this._emitter.emit('data', data);
+        });
+        this._socket.on('error', () => {
+            this._emitter.emit('close');
+        });
+        this._socket.on('close', () => {
+            this._emitter.emit('close');
+        });
+    }
+
+    process(data: Buffer): void {
+        // log.verbose('socks5', `fowarding ${data.byteLength} bytes to ${this._address}:${this._port}`);
+
+        this._socket.write(data);
+    }
+
+    close(): void {
+        this._socket.end();
+    }
+}
+
+/**
+ * @see https://tools.ietf.org/html/rfc1928
+ */
 export default class Socks5ServerConnection {
     private _emitter: EventEmitter = new EventEmitter();
 
     private _state: Socks5ConnectionState = Socks5ConnectionState.Handshake;
 
-    private _address: string | undefined;
-
-    private _port: number | undefined;
-
-    private _socket: net.Socket | null = null;
-
-    public constructor() {
-
-    }
+    private _handler: Socks5CommandHandler | undefined;
 
     private checkVersion(data: BufferReader): boolean {
         if (data.readUint8() !== 0x05) {
@@ -99,7 +160,7 @@ export default class Socks5ServerConnection {
                     if (method === Socks5AuthenticateMethod.None) {
                         response.writeUInt8(method, 1);
                         this._emitter.emit('data', response);
-                        this._state = Socks5ConnectionState.Ready;
+                        this._state = Socks5ConnectionState.WaitCommand;
                         return;
                     }
                 }
@@ -107,26 +168,29 @@ export default class Socks5ServerConnection {
                 response.writeUInt8(0xFF, 1);
                 this._emitter.emit('data', response);
                 break;
-            case Socks5ConnectionState.Ready:
+            case Socks5ConnectionState.WaitCommand:
                 if (!this.checkVersion(reader)) {
                     return;
                 }
 
                 const command: Socks5Command = reader.readUint8();
 
-                // reversed
+                // reserved
                 reader.readUint8();
 
                 const addressType: Socks5AddressType = reader.readUint8();
 
-                let host: string;
+                let address: string;
                 switch (addressType) {
                     case Socks5AddressType.Ipv4:
-                        host = [reader.readUint8(), reader.readUint8(), reader.readUint8(), reader.readUint8()].join('.');
+                        address = ipaddr.fromByteArray(Array.from(reader.readBuffer(4))).toString();
                         break;
                     case Socks5AddressType.DomainName:
                         const length = reader.readUint8();
-                        host = reader.readString(length);
+                        address = reader.readString(length);
+                        break;
+                    case Socks5AddressType.Ipv6:
+                        address = ipaddr.fromByteArray(Array.from(reader.readBuffer(16))).toString();
                         break;
                     default:
                         this._emitter.emit('close');
@@ -137,42 +201,22 @@ export default class Socks5ServerConnection {
 
                 switch (command) {
                     case Socks5Command.Connect:
-                        this._address = host;
-                        this._port = port;
-
-                        log.info('socks5', `connecting to ${host}:${port}`);
-
-                        this._socket = net.connect(port, host);
-                        this._socket.on('connect', () => {
-                            log.info('socks5', `connected to ${host}:${port}`);
-
-                            const response = Buffer.alloc(data.length);
-                            data.copy(response);
-                            response.writeUInt8(0x00, 1);
-                            this._emitter.emit('data', response);
-                            this._state = Socks5ConnectionState.Connect;
-                        });
-                        this._socket.on('data', (data) => {
-                            // log.verbose('socks5', `received ${data.byteLength} bytes from ${this._address}:${this._port}`);
-
-                            this._emitter.emit('data', data);
-                        });
-                        this._socket.on('error', () => {
-                            this._emitter.emit('close');
-                        });
-                        this._socket.on('close', () => {
-                            this._emitter.emit('close');
-                        });
+                        this._handler = new Socks5ConnectCommandHandler(this._emitter, address, port);
                         break;
                     default:
                         this._emitter.emit('close');
                         break;
                 }
                 break;
-            case Socks5ConnectionState.Connect:
-                // log.verbose('socks5', `fowarding ${data.byteLength} bytes to ${this._address}:${this._port}`);
-                this._socket!.write(data);
+            case Socks5ConnectionState.Relay:
+                this._handler!.process(data);
                 break;
+        }
+    }
+
+    public close(): void {
+        if (this._handler) {
+            this._handler.close();
         }
     }
 
