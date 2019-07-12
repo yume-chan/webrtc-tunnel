@@ -8,7 +8,7 @@ import { prefix } from './common';
 import { KoshareRtcSignalTransport } from './koshare-rtc-signal-transport';
 import RtcDataConnection from './rtc-data-connection';
 import { RtcSignalServer } from './rtc-signal';
-import Socks5ServerConnection from './socks5-server';
+import Socks5ServerConnection from '@yume-chan/socks5-server';
 
 log.level = 'silly';
 
