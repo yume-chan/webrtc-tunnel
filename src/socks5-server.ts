@@ -210,6 +210,8 @@ export default class Socks5ServerConnection {
                         this._handler = new Socks5ConnectCommandHandler(this._emitter, address, port);
                         this._state = Socks5ConnectionState.Relay;
                         break;
+                    case Socks5Command.Bind:
+                    case Socks5Command.UdpAssociate:
                     default:
                         this._emitter.emit('close');
                         break;

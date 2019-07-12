@@ -73,6 +73,10 @@ const server = createServer(async (client) => {
 
             remote.end();
         });
+
+        client.on('close', () => {
+            remote.end();
+        });
     } catch (e) {
         connection.close();
         _connect = null;

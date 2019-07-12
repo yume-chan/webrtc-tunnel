@@ -178,7 +178,7 @@ export default class RtcDataChannelStream extends Duplex {
         }
     }
 
-    public _destroy(error: Error, callback: (err: Error | null) => void): void {
+    public _final(callback: (err: Error | null) => void): void {
         this._dataChannel.close();
         callback(null);
     }
