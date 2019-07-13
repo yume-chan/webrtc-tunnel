@@ -109,7 +109,7 @@ describe('rtc data connection', () => {
         const local = await client.createChannelStream(label);
         const remote = await resolver.promise;
 
-        const count = 10000;
+        const count = 1000;
         for (let i = 0; i < count; i++) {
             local.write(data, 'utf8');
         }
