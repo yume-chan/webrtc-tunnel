@@ -79,13 +79,13 @@ abstract class RtcSignalBase {
 }
 
 export class RtcSignalClient extends RtcSignalBase {
-    public constructor(clientId: string, transportation: RtcSignalTransport) {
-        super(clientId, transportation);
+    public constructor(id: string, transportation: RtcSignalTransport) {
+        super(id, transportation);
     }
 
-    public async ping(serverId: string, offer: RTCSessionDescriptionInit): Promise<PongMessage> {
+    public async ping(remoteId: string, offer: RTCSessionDescriptionInit): Promise<PongMessage> {
         await this._addIceCandidateHandler.get();
-        return await this._transportation.broadcastPing({ sourceId: this._id, destinationId: serverId, offer });
+        return await this._transportation.broadcastPing({ sourceId: this._id, destinationId: remoteId, offer });
     }
 }
 
@@ -96,8 +96,8 @@ export class RtcSignalServer extends RtcSignalBase {
         this._transportation.addPingHandler(this.handlePingMessage)
     );
 
-    public constructor(serverId: string, transportation: RtcSignalTransport) {
-        super(serverId, transportation);
+    public constructor(id: string, transportation: RtcSignalTransport) {
+        super(id, transportation);
     }
 
     private handlePingMessage = (message: PingMessage): void => {

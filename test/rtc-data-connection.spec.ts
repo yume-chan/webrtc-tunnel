@@ -92,7 +92,7 @@ describe('rtc data connection', () => {
 
     test('send multiple', async () => {
         const label = Date.now().toString();
-        const data = randomString();
+        const data = randomString(1000);
 
         const handleData = jest.fn((received: string) => {
             expect(received).toBe(data);

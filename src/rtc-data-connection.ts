@@ -7,9 +7,10 @@ import { PromiseResolver } from '@yume-chan/async-operation-manager';
 
 import RtcDataChannelStream from './rtc-data-channel-stream';
 import { RtcSignalClient, RtcSignalServer } from "./rtc-signal";
+import { RtcDataChannelDispatcher } from './rtc-data-channel-dispatcher';
 
-class RtcIceCandidateBuffer {
-    private _buffer: RTCIceCandidate[] = [];
+class RtcIceCandidateQueue {
+    private _queue: RTCIceCandidate[] = [];
 
     private _connection: RTCPeerConnection;
 
@@ -30,15 +31,15 @@ class RtcIceCandidateBuffer {
                 return;
             }
 
-            this._buffer.push(candidate);
+            this._queue.push(candidate);
         });
     }
 
     public setHandler(handler: (candidate: RTCIceCandidate) => void): void {
-        for (const candidate of this._buffer) {
+        for (const candidate of this._queue) {
             handler(candidate);
         }
-        this._buffer = [];
+        this._queue = [];
 
         this._handler = handler;
     }
@@ -76,12 +77,12 @@ export class RtcDataConnectionListener {
 
 export default class RtcDataConnection extends EventEmitter {
     public static async connect(
-        serverId: string,
+        remoteId: string,
         signal: RtcSignalClient,
         configuration?: RTCConfiguration
     ): Promise<RtcDataConnection> {
         const raw: RTCPeerConnection = new RTCPeerConnection(configuration);
-        const candidates = new RtcIceCandidateBuffer(raw);
+        const candidates = new RtcIceCandidateQueue(raw);
         const control = raw.createDataChannel('control');
 
         const resolver = new PromiseResolver<void>();
@@ -102,7 +103,7 @@ export default class RtcDataConnection extends EventEmitter {
                     }
                 });
 
-        signal.addIceCandidateListener(serverId, async (candidate) => {
+        signal.addIceCandidateListener(remoteId, async (candidate) => {
             await raw.addIceCandidate(candidate);
 
             log.info('wrtc', 'ice candidate added');
@@ -112,10 +113,10 @@ export default class RtcDataConnection extends EventEmitter {
         const offer = await raw.createOffer();
         await raw.setLocalDescription(offer);
 
-        const { answer } = await signal.ping(serverId, offer);
+        const { answer } = await signal.ping(remoteId, offer);
 
         candidates.setHandler(async (candidate) => {
-            await signal.sendIceCandidate(serverId, candidate);
+            await signal.sendIceCandidate(remoteId, candidate);
         });
 
         await raw.setRemoteDescription(answer);
@@ -135,7 +136,7 @@ export default class RtcDataConnection extends EventEmitter {
 
             const raw = new RTCPeerConnection();
             let connection: RtcDataConnection;
-            const candidates = new RtcIceCandidateBuffer(raw);
+            const candidates = new RtcIceCandidateQueue(raw);
 
             candidates.setHandler(async (candidate) => {
                 await signal.sendIceCandidate(sourceId, candidate);
@@ -158,10 +159,9 @@ export default class RtcDataConnection extends EventEmitter {
                     if (label === 'control') {
                         connection = new RtcDataConnection(raw, client);
                         handler(connection);
-                        return;
+                    } else {
+                        connection.emit('data-channel-stream', new RtcDataChannelStream(client, connection._dispatcher));
                     }
-
-                    connection.emit('data-channel-stream', new RtcDataChannelStream(client, connection._control));
                 };
             };
 
@@ -183,6 +183,8 @@ export default class RtcDataConnection extends EventEmitter {
     private _control: RTCDataChannel;
     public get control(): RTCDataChannel { return this._control; }
 
+    private _dispatcher: RtcDataChannelDispatcher;
+
     constructor(connection: RTCPeerConnection, control: RTCDataChannel) {
         super();
 
@@ -194,6 +196,8 @@ export default class RtcDataConnection extends EventEmitter {
                 this.emit('error', error);
             });
         });
+
+        this._dispatcher = new RtcDataChannelDispatcher(this._raw, this._control);
 
         this._raw.onconnectionstatechange =
             transfromConnectionStateChangeHandler(
@@ -210,8 +214,8 @@ export default class RtcDataConnection extends EventEmitter {
     }
 
     public async createChannelStream(label: string): Promise<RtcDataChannelStream> {
-        const channel = this._raw.createDataChannel(label);
-        return new RtcDataChannelStream(channel, this._control);
+        const channel = this._dispatcher.createDataChannel(label);
+        return new RtcDataChannelStream(channel, this._dispatcher);
     }
 
     public on(event: 'close', listener: () => void): this;
