@@ -72,8 +72,6 @@ export class RtcDataChannelDispatcher {
 
     private _controlQueue: RtcDataChannelMessageQueue;
 
-    private _streams: Set<RTCDataChannel> = new Set();
-
     private _queues: Map<string, RtcDataChannelMessageQueue> = new Map();
 
     constructor(connection: RTCPeerConnection, control: RTCDataChannel) {
@@ -101,19 +99,12 @@ export class RtcDataChannelDispatcher {
         });
     }
 
-    public createDataChannel(label: string): RTCDataChannel {
-        const stream = this._connection.createDataChannel(label, { priority: 'very-low' });
-        stream.binaryType = 'arraybuffer';
+    public addDataChannel(channel: RTCDataChannel): void {
+        this._queues.set(channel.label, new RtcDataChannelMessageQueue(channel));
 
-        this._streams.add(stream);
-        this._queues.set(stream.label, new RtcDataChannelMessageQueue(stream));
-
-        stream.addEventListener('close', () => {
-            this._streams.delete(stream);
-            this._queues.delete(stream.label);
+        channel.addEventListener('close', () => {
+            this._queues.delete(channel.label);
         });
-
-        return stream;
     }
 
     private _processingControlQueue = false;

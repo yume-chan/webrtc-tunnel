@@ -149,18 +149,19 @@ export default class RtcDataConnection extends EventEmitter {
                 log.verbose('wrtc', '%j', candidate);
             });
 
-            raw.ondatachannel = ({ channel: client }) => {
-                const label = client.label;
+            raw.ondatachannel = ({ channel }) => {
+                const label = channel.label;
                 log.info('wrtc', 'on data channel: %s', label);
 
-                client.onopen = () => {
+                channel.onopen = () => {
                     log.info('wrtc', 'on channel open: %s', label);
 
                     if (label === 'control') {
-                        connection = new RtcDataConnection(raw, client);
+                        connection = new RtcDataConnection(raw, channel);
                         handler(connection);
                     } else {
-                        connection.emit('data-channel-stream', new RtcDataChannelStream(client, connection._dispatcher));
+                        connection._dispatcher.addDataChannel(channel);
+                        connection.emit('data-channel-stream', new RtcDataChannelStream(channel, connection._dispatcher));
                     }
                 };
             };
@@ -214,7 +215,8 @@ export default class RtcDataConnection extends EventEmitter {
     }
 
     public async createChannelStream(label: string): Promise<RtcDataChannelStream> {
-        const channel = this._dispatcher.createDataChannel(label);
+        const channel = this._raw.createDataChannel(label, { priority: 'very-low' });
+        this._dispatcher.addDataChannel(channel);
         return new RtcDataChannelStream(channel, this._dispatcher);
     }
 

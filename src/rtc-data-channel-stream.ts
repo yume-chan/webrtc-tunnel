@@ -4,7 +4,7 @@ import { RtcDataChannelDispatcher } from './rtc-data-channel-dispatcher';
 const useSetTimeoutFallback = true;
 
 export default class RtcDataChannelStream extends Duplex {
-    private _dataChannel: RTCDataChannel;
+    private _channel: RTCDataChannel;
 
     private _dispatcher: RtcDataChannelDispatcher;
 
@@ -12,14 +12,14 @@ export default class RtcDataChannelStream extends Duplex {
 
     private _buffer: Buffer[] = [];
 
-    public get label(): string { return this._dataChannel.label; }
+    public get label(): string { return this._channel.label; }
 
-    public constructor(dataChannel: RTCDataChannel, dispatcher: RtcDataChannelDispatcher) {
+    public constructor(channel: RTCDataChannel, dispatcher: RtcDataChannelDispatcher) {
         super({ allowHalfOpen: false });
 
-        this._dataChannel = dataChannel;
-        this._dataChannel.binaryType = 'arraybuffer';
-        this._dataChannel.addEventListener('message', ({ data }: { data: ArrayBuffer }) => {
+        this._channel = channel;
+        this._channel.binaryType = 'arraybuffer';
+        this._channel.addEventListener('message', ({ data }: { data: ArrayBuffer }) => {
             const buffer = Buffer.from(data);
             this._buffer.push(buffer);
 
@@ -27,12 +27,12 @@ export default class RtcDataChannelStream extends Duplex {
                 this.flushBuffer();
             }
         });
-        this._dataChannel.addEventListener('close', () => {
+        this._channel.addEventListener('close', () => {
             process.nextTick(() => {
                 this.emit('end');
             });
         });
-        this._dataChannel.addEventListener('error', ({ error }) => {
+        this._channel.addEventListener('error', ({ error }) => {
             process.nextTick(() => {
                 this.emit('error', error);
             });
@@ -46,7 +46,7 @@ export default class RtcDataChannelStream extends Duplex {
             while (this._buffer.length) {
                 if (!this.push(this._buffer.shift())) {
                     if (!this._localFull) {
-                        this._dispatcher.sendControlMessage(this._dataChannel, 'full');
+                        this._dispatcher.sendControlMessage(this._channel, 'full');
                         this._localFull = true;
                     }
                     return;
@@ -54,7 +54,7 @@ export default class RtcDataChannelStream extends Duplex {
             }
 
             if (this._localFull) {
-                this._dispatcher.sendControlMessage(this._dataChannel, 'empty');
+                this._dispatcher.sendControlMessage(this._channel, 'empty');
                 this._localFull = false;
             }
         } catch (error) {
@@ -65,12 +65,12 @@ export default class RtcDataChannelStream extends Duplex {
     }
 
     public async _write(chunk: Buffer, encoding: string, callback: (err?: Error) => void): Promise<void> {
-        await this._dispatcher.send(this._dataChannel, chunk);
+        await this._dispatcher.send(this._channel, chunk);
         callback();
     }
 
     public _final(callback: (err: Error | null) => void): void {
-        this._dataChannel.close();
+        this._channel.close();
         callback(null);
     }
 
