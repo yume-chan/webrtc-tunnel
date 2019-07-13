@@ -22,8 +22,6 @@ const serverId = randomBytes(8).toString('base64');
             await KoshareReconnectClient.connect('wss://chensi.moe/koshare', prefix))),
         (connection) => {
             connection.on('data-channel-stream', (client) => {
-                const label = client.label;
-
                 const remote = new Socks5ServerConnection();
                 remote.on('data', (data) => {
                     client.write(data);
@@ -34,6 +32,9 @@ const serverId = randomBytes(8).toString('base64');
 
                 client.on('data', (data: Buffer) => {
                     remote.process(data);
+                });
+                client.on('error', () => {
+                    remote.close();
                 });
                 client.on('close', () => {
                     remote.close();

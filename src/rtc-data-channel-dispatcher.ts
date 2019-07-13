@@ -17,6 +17,10 @@ function waitDataChannelBufferAmountLow(channel: RTCDataChannel): Promise<void> 
 
     const resolver = new PromiseResolver<void>();
     const intervalId = setInterval(() => {
+        if (channel.readyState !== 'open') {
+            resolver.reject(new Error(`readyState is not 'open'`));
+        }
+
         if (channel.bufferedAmount < bufferLowAmount) {
             resolver.resolve();
             clearInterval(intervalId);
@@ -156,10 +160,14 @@ export class RtcDataChannelDispatcher {
             pending.sort((a, b) => a.channel.bufferedAmount - b.channel.bufferedAmount);
             const candidate = pending[0];
 
-            await waitDataChannelBufferAmountLow(candidate.channel);
             const message = candidate.dequeue()!;
-            candidate.channel.send(message.data as any);
-            message.resolver.resolve();
+            try {
+                await waitDataChannelBufferAmountLow(candidate.channel);
+                candidate.channel.send(message.data as any);
+                message.resolver.resolve();
+            } catch (e) {
+                message.resolver.reject(e);
+            }
         }
 
         this._processingQueues = false;

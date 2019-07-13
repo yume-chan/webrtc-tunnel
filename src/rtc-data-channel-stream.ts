@@ -65,8 +65,12 @@ export default class RtcDataChannelStream extends Duplex {
     }
 
     public async _write(chunk: Buffer, encoding: string, callback: (err?: Error) => void): Promise<void> {
-        await this._dispatcher.send(this._channel, chunk);
-        callback();
+        try {
+            await this._dispatcher.send(this._channel, chunk);
+            callback();
+        } catch (e) {
+            callback(e);
+        }
     }
 
     public _final(callback: (err: Error | null) => void): void {
