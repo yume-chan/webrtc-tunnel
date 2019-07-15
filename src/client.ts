@@ -79,34 +79,37 @@ const server = createServer(async (client) => {
 
         log.info('forward', `data channel ${label} created`);
 
-        remote.pipe(new LogStream('remote')).pipe(client);
-        client.pipe(new LogStream('client')).pipe(remote);
+        client.pipe(remote);
+        remote.pipe(client);
 
+
+        client.on('error', (error) => {
+            log.warn('forward', 'data channel %s client error: %s', label, error.message);
+            log.warn('forward', error.stack!);
+
+            remote.end();
+        });
         remote.on('error', (error) => {
-            log.warn('forward', 'server %s error: %s', label, error.message);
+            log.warn('forward', 'data channel %s remote error: %s', label, error.message);
             log.warn('forward', error.stack!);
 
             client.end();
         });
 
-        client.on('error', (error) => {
-            log.warn('forward', 'client %s error: %s', label, error.message);
-            log.warn('forward', error.stack!);
-
-            remote.end();
-        });
-
         client.on('close', () => {
-            log.info('forward', `data channel ${label} closed by remote`);
+            log.info('forward', `data channel ${label} closed by client`);
 
             remote.end();
         });
         remote.on('close', () => {
-            log.info('forward', `data channel ${label} closed by client`);
+            log.info('forward', `data channel ${label} closed by remote`);
 
             client.end();
         });
-    } catch (e) {
+    } catch (error) {
+        log.warn('forward', 'main loop error: %s', error.message);
+        log.warn('forward', error.stack!);
+
         connection.close();
         _connect = null;
 

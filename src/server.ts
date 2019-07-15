@@ -21,6 +21,11 @@ const serverId = randomBytes(8).toString('base64');
         new KoshareRtcSignalTransport(
             await KoshareReconnectClient.connect('wss://chensi.moe/koshare', prefix))),
         (connection) => {
+            connection.on('error', (error) => {
+                log.warn('forward', 'connection error: %s', error.message);
+                log.warn('forward', error.stack!);
+            });
+
             connection.on('data-channel-stream', (client) => {
                 const remote = new Socks5ServerConnection();
 
@@ -41,12 +46,12 @@ const serverId = randomBytes(8).toString('base64');
                 });
 
                 client.on('close', () => {
-                    log.info('forward', `data channel ${client.label} closed by remote`);
+                    log.info('forward', `data channel ${client.label} closed by client`);
 
                     remote.end();
                 });
                 remote.on('close', () => {
-                    log.info('forward', `data channel ${client.label} closed by client`);
+                    log.info('forward', `data channel ${client.label} closed by remote`);
 
                     client.end();
                 });

@@ -188,7 +188,7 @@ export default class RtcDataConnection extends EventEmitter {
         this._raw = connection;
 
         this._control = control;
-        this._control.addEventListener('error', (error) => {
+        this._control.addEventListener('error', ({ error }) => {
             process.nextTick(() => {
                 this.emit('error', error);
             });
@@ -216,6 +216,7 @@ export default class RtcDataConnection extends EventEmitter {
         return new RtcDataChannelStream(channel, this._dispatcher);
     }
 
+    public on(event: 'error', listener: (e: Error) => void): this;
     public on(event: 'close', listener: () => void): this;
     public on(event: 'data-channel-stream', listener: (stream: RtcDataChannelStream) => void): this;
     public on(event: string, listener: (...args: any) => any): this {

@@ -3,7 +3,7 @@ import { PromiseResolver } from "@yume-chan/async-operation-manager";
 interface RtcDataChannelSendTask {
     resolver: PromiseResolver<void>;
 
-    data: string | ArrayBuffer;
+    data: ArrayBuffer;
 }
 
 const resolvedPromise = Promise.resolve();
@@ -58,7 +58,7 @@ class RtcDataChannelSendQueue {
         this._channel = channel;
     }
 
-    public enqueue(data: string | ArrayBuffer): Promise<void> {
+    public enqueue(data: ArrayBuffer): Promise<void> {
         const resolver = new PromiseResolver<void>();
         this._queue.push({ resolver, data });
         return resolver.promise;
@@ -156,7 +156,10 @@ export class RtcDataChannelDispatcher {
             const task = candidate.dequeue()!;
             try {
                 await waitDataChannelBufferAmountLow(candidate.channel);
-                candidate.channel.send(task.data as any);
+                if (candidate.channel.readyState !== 'open') {
+                    throw new Error(`RTCDataChannel.readyState should be 'open', but got '${candidate.channel.readyState}'`);
+                }
+                candidate.channel.send(task.data);
                 task.resolver.resolve();
             } catch (e) {
                 task.resolver.reject(e);
