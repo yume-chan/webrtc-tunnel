@@ -82,7 +82,6 @@ const server = createServer(async (client) => {
         client.pipe(remote);
         remote.pipe(client);
 
-
         client.on('error', (error) => {
             log.warn('forward', 'data channel %s client error: %s', label, error.message);
             log.warn('forward', error.stack!);
