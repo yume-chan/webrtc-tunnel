@@ -11,7 +11,7 @@ export default class RtcDataChannelStream extends Duplex {
     public get label(): string { return this._channel.label; }
 
     public constructor(channel: RTCDataChannel, dispatcher: RtcDataChannelDispatcher) {
-        super({ allowHalfOpen: false });
+        super();
 
         this._channel = channel;
         this._channel.binaryType = 'arraybuffer';
@@ -27,6 +27,9 @@ export default class RtcDataChannelStream extends Duplex {
                 this.emit('error', error);
                 this.end();
             });
+        });
+        this._channel.addEventListener('close', () => {
+            this.end();
         });
 
         this._dispatcher = dispatcher;
@@ -62,7 +65,6 @@ export default class RtcDataChannelStream extends Duplex {
     }
 
     public _destroy(err: Error | null, callback: (err: Error | null) => void) {
-        this.emit('close');
         callback(err);
     }
 }
