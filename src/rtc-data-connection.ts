@@ -198,7 +198,7 @@ export default class RtcDataConnection extends EventEmitter {
             });
         });
 
-        this._dispatcher = new RtcDataChannelDispatcher(this._raw, this._control);
+        this._dispatcher = new RtcDataChannelDispatcher(this._control);
 
         this._raw.onconnectionstatechange =
             transfromConnectionStateChangeHandler(

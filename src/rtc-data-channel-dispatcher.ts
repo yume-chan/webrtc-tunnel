@@ -1,6 +1,6 @@
 import { PromiseResolver } from "@yume-chan/async-operation-manager";
 
-interface RtcDataChannelMessage {
+interface RtcDataChannelSendTask {
     resolver: PromiseResolver<void>;
 
     data: string | ArrayBuffer;
@@ -45,11 +45,11 @@ interface RtcDataChannelFullControlMessage extends RtcDataChannelControlMessageB
 
 type RtcDataChannelControlMessage = RtcDataChannelEmptyControlMessage | RtcDataChannelFullControlMessage;
 
-class RtcDataChannelMessageQueue {
+class RtcDataChannelSendQueue {
     private _channel: RTCDataChannel;
     public get channel(): RTCDataChannel { return this._channel; }
 
-    private _queue: RtcDataChannelMessage[] = [];
+    private _queue: RtcDataChannelSendTask[] = [];
     public get length() { return this._queue.length; }
 
     public remoteFull: boolean = false;
@@ -64,25 +64,19 @@ class RtcDataChannelMessageQueue {
         return resolver.promise;
     }
 
-    public dequeue(): RtcDataChannelMessage | undefined {
+    public dequeue(): RtcDataChannelSendTask | undefined {
         return this._queue.shift();
     }
 }
 
 export class RtcDataChannelDispatcher {
-    private _connection: RTCPeerConnection;
-
     private _control: RTCDataChannel;
+    private _controlQueue: string[] = [];
 
-    private _controlQueue: RtcDataChannelMessageQueue;
+    private _queues: Map<string, RtcDataChannelSendQueue> = new Map();
 
-    private _queues: Map<string, RtcDataChannelMessageQueue> = new Map();
-
-    constructor(connection: RTCPeerConnection, control: RTCDataChannel) {
-        this._connection = connection;
-
+    constructor(control: RTCDataChannel) {
         this._control = control;
-        this._controlQueue = new RtcDataChannelMessageQueue(this._control);
         this._control.addEventListener('message', ({ data }: { data: string }) => {
             const message: RtcDataChannelControlMessage = JSON.parse(data);
 
@@ -104,8 +98,7 @@ export class RtcDataChannelDispatcher {
     }
 
     public addDataChannel(channel: RTCDataChannel): void {
-        this._queues.set(channel.label, new RtcDataChannelMessageQueue(channel));
-
+        this._queues.set(channel.label, new RtcDataChannelSendQueue(channel));
         channel.addEventListener('close', () => {
             this._queues.delete(channel.label);
         });
@@ -122,8 +115,8 @@ export class RtcDataChannelDispatcher {
 
         while (this._controlQueue.length) {
             await waitDataChannelBufferAmountLow(this._control);
-            const message = this._controlQueue.dequeue()!;
-            this._control.send(message.data as any)
+            const message = this._controlQueue.shift()!;
+            this._control.send(message);
         }
 
         this._processingControlQueue = false;
@@ -132,7 +125,7 @@ export class RtcDataChannelDispatcher {
     }
 
     public sendControlMessage(channel: RTCDataChannel, type: 'full' | 'empty') {
-        this._controlQueue.enqueue(JSON.stringify({ label: channel.label, type }));
+        this._controlQueue.push(JSON.stringify({ label: channel.label, type }));
         this.processControlQueue();
     }
 
@@ -160,13 +153,13 @@ export class RtcDataChannelDispatcher {
             pending.sort((a, b) => a.channel.bufferedAmount - b.channel.bufferedAmount);
             const candidate = pending[0];
 
-            const message = candidate.dequeue()!;
+            const task = candidate.dequeue()!;
             try {
                 await waitDataChannelBufferAmountLow(candidate.channel);
-                candidate.channel.send(message.data as any);
-                message.resolver.resolve();
+                candidate.channel.send(task.data as any);
+                task.resolver.resolve();
             } catch (e) {
-                message.resolver.reject(e);
+                task.resolver.reject(e);
             }
         }
 

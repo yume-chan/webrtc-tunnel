@@ -23,24 +23,24 @@ const serverId = randomBytes(8).toString('base64');
         (connection) => {
             connection.on('data-channel-stream', (client) => {
                 const remote = new Socks5ServerConnection();
-                remote.on('data', (data) => {
-                    client.write(data);
+                remote.pipe(client);
+                remote.on('error', () => {
+                    client.end();
                 });
                 remote.on('close', () => {
                     client.end();
                 });
 
-                client.on('data', (data: Buffer) => {
-                    remote.process(data);
-                });
+                client.pipe(remote);
                 client.on('error', () => {
-                    remote.close();
+                    remote.end();
                 });
                 client.on('close', () => {
-                    remote.close();
+                    remote.end();
                 });
             });
-        });
+        }
+    );
 
     log.info('server', 'server id: %s', serverId);
 })();
