@@ -17,14 +17,9 @@ export default class RtcDataChannelStream extends Duplex {
         this._channel.binaryType = 'arraybuffer';
         this._channel.addEventListener('message', ({ data }: { data: ArrayBuffer }) => {
             const buffer = Buffer.from(data);
-            if (!this.push(buffer)) {
-                if (!this._localFull) {
-                    this._dispatcher.sendControlMessage(this._channel, 'full');
-                    this._localFull = true;
-                }
-            } else if (this._localFull) {
-                this._dispatcher.sendControlMessage(this._channel, 'empty');
-                this._localFull = false;
+            if (!this.push(buffer) && !this._localFull) {
+                this._dispatcher.sendControlMessage(this._channel, 'full');
+                this._localFull = true;
             }
         });
         this._channel.addEventListener('error', ({ error }) => {
@@ -37,8 +32,11 @@ export default class RtcDataChannelStream extends Duplex {
         this._dispatcher = dispatcher;
     }
 
-    public _read(size: number): void {
-        this._localFull = false;
+    public _read(): void {
+        if (this._localFull) {
+            this._dispatcher.sendControlMessage(this._channel, 'empty');
+            this._localFull = false;
+        }
     }
 
     public async _write(chunk: Buffer, encoding: string, callback: (err?: Error) => void): Promise<void> {

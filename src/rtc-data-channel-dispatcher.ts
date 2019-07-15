@@ -167,7 +167,11 @@ export class RtcDataChannelDispatcher {
     }
 
     public async send(channel: RTCDataChannel, data: ArrayBuffer): Promise<void> {
-        const result = this._queues.get(channel.label)!.enqueue(data);
+        const queue = this._queues.get(channel.label);
+        if (!queue) {
+            throw new Error('cannot write after close');
+        }
+        const result = queue.enqueue(data);
         this.processQueues();
         return result;
     }

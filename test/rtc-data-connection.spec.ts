@@ -99,22 +99,31 @@ describe('rtc data connection', () => {
         });
 
         let resolver = new PromiseResolver<RtcDataChannelStream>();
-        server.on('data-channel-stream', (connection) => {
-            expect(connection).toHaveProperty('label', label);
+        server.on('data-channel-stream', (stream) => {
+            expect(stream).toHaveProperty('label', label);
 
-            connection.setEncoding('utf8');
-            resolver.resolve(connection);
+            stream.setEncoding('utf8');
+            resolver.resolve(stream);
         });
 
         const local = await client.createChannelStream(label);
         const remote = await resolver.promise;
 
-        const count = 1000;
-        for (let i = 0; i < count; i++) {
-            local.write(data, 'utf8');
+        const count = 100;
+        let i = 0;
+        async function writeData() {
+            while (i < count) {
+                i++
+                await delay(0);
+                if (!local.write(data, 'utf8')) {
+                    break;
+                }
+            }
         }
+        local.on('drain', writeData);
+        writeData();
 
-        await delay(100);
+        await delay(1000);
 
         remote.on('data', handleData);
 
