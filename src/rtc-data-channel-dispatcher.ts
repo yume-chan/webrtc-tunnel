@@ -25,7 +25,7 @@ function waitDataChannelBufferAmountLow(channel: RTCDataChannel): Promise<void> 
             resolver.resolve();
             clearInterval(intervalId);
         }
-    }, 500);
+    }, 100);
     return resolver.promise;
 }
 
