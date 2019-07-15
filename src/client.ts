@@ -1,7 +1,11 @@
 import { randomBytes } from 'crypto';
 import { createServer } from 'net';
-import { KoshareReconnectClient } from '@yume-chan/koshare-router';
+import { Transform } from 'stream';
+
 import log from 'npmlog';
+import * as ipaddr from 'ipaddr.js';
+
+import { KoshareReconnectClient } from '@yume-chan/koshare-router';
 
 import { RtcSignalClient } from './rtc-signal';
 import { prefix } from './common';
@@ -50,15 +54,33 @@ function connect(): Promise<RtcDataConnection> {
     return _connect;
 }
 
+class LogStream extends Transform {
+    private _name: string;
+
+    public constructor(name: string) {
+        super();
+
+        this._name = name;
+    }
+
+    public _transform(chunk: Buffer, encoding: string, callback: () => void): void {
+        log.verbose('stream', `stream ${this._name} reviced ${chunk.length} bytes`);
+        this.push(chunk, encoding);
+        callback();
+    }
+}
+
 const server = createServer(async (client) => {
     const connection = await connect();
 
     try {
-        const label = `${client.remoteAddress}:${client.remotePort}`;
+        const label = `${ipaddr.process(client.remoteAddress!).toString()}:${client.remotePort}`;
         const remote = await connection.createChannelStream(label);
 
-        remote.pipe(client);
-        client.pipe(remote);
+        log.info('forward', `data channel ${label} created`);
+
+        remote.pipe(new LogStream('remote')).pipe(client);
+        client.pipe(new LogStream('client')).pipe(remote);
 
         remote.on('error', (error) => {
             log.warn('forward', 'server %s error: %s', label, error.message);
@@ -75,7 +97,14 @@ const server = createServer(async (client) => {
         });
 
         client.on('close', () => {
+            log.info('forward', `data channel ${label} closed by remote`);
+
             remote.end();
+        });
+        remote.on('close', () => {
+            log.info('forward', `data channel ${label} closed by client`);
+
+            client.end();
         });
     } catch (e) {
         connection.close();

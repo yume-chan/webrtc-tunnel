@@ -151,11 +151,7 @@ export default class RtcDataConnection extends EventEmitter {
 
             raw.ondatachannel = ({ channel }) => {
                 const label = channel.label;
-                log.info('wrtc', 'on data channel: %s', label);
-
                 channel.onopen = () => {
-                    log.info('wrtc', 'on channel open: %s', label);
-
                     if (label === 'control') {
                         connection = new RtcDataConnection(raw, channel);
                         handler(connection);

@@ -23,20 +23,32 @@ const serverId = randomBytes(8).toString('base64');
         (connection) => {
             connection.on('data-channel-stream', (client) => {
                 const remote = new Socks5ServerConnection();
+
+                client.pipe(remote);
                 remote.pipe(client);
-                remote.on('error', () => {
-                    client.end();
+
+                client.on('error', (error) => {
+                    log.warn('forward', 'client %s error: %s', client.label, error.message);
+                    log.warn('forward', error.stack!);
+
+                    remote.end();
                 });
-                remote.on('close', () => {
+                remote.on('error', (error) => {
+                    log.warn('forward', 'server %s error: %s', client.label, error.message);
+                    log.warn('forward', error.stack!);
+
                     client.end();
                 });
 
-                client.pipe(remote);
-                client.on('error', () => {
+                client.on('close', () => {
+                    log.info('forward', `data channel ${client.label} closed by remote`);
+
                     remote.end();
                 });
-                client.on('close', () => {
-                    remote.end();
+                remote.on('close', () => {
+                    log.info('forward', `data channel ${client.label} closed by client`);
+
+                    client.end();
                 });
             });
         }
