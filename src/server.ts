@@ -3,17 +3,36 @@ import { randomBytes } from 'crypto';
 import log from 'npmlog';
 
 import { KoshareReconnectClient } from '@yume-chan/koshare-router';
+import Socks5ServerConnection from '@yume-chan/socks5-server';
 
 import { prefix } from './common';
 import { KoshareRtcSignalTransport } from './koshare-rtc-signal-transport';
 import RtcDataConnection from './rtc-data-connection';
 import { RtcSignalServer } from './rtc-signal';
-import Socks5ServerConnection from '@yume-chan/socks5-server';
+import { Transform } from 'stream';
 
 log.level = 'silly';
 
-const serverId = randomBytes(8).toString('base64');
-// const serverId = 'local';
+const serverId = process.argv[2] || randomBytes(8).toString('base64');
+
+class LogStream extends Transform {
+    private _name: string;
+
+    private _received: number = 0;
+
+    public constructor(name: string) {
+        super();
+
+        this._name = name;
+    }
+
+    public _transform(chunk: Buffer, encoding: string, callback: () => void): void {
+        this._received += chunk.length;
+        log.verbose('stream', `stream ${this._name} reviced ${chunk.length}/${this._received} bytes`);
+        this.push(chunk, encoding);
+        callback();
+    }
+}
 
 (async () => {
     await RtcDataConnection.listen(new RtcSignalServer(
