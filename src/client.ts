@@ -12,6 +12,7 @@ import { prefix } from './common';
 import { KoshareRtcSignalTransport } from './koshare-rtc-signal-transport';
 import RtcDataConnection from './rtc-data-connection';
 import { delay } from './util';
+import RtcDataChannelStream from './rtc-data-channel-stream';
 
 log.level = 'silly';
 
@@ -71,23 +72,42 @@ class LogStream extends Transform {
 }
 
 const server = createServer(async (client) => {
+    let closed = false;
+    let label: string;
+    let remote: RtcDataChannelStream | undefined;
+    client.on('error', (error) => {
+        log.warn('forward', 'data channel %s client error: %s', label, error.message);
+        log.warn('forward', error.stack!);
+
+        closed = true;
+        if (typeof remote !== 'undefined') {
+            remote.end();
+        }
+    });
+    client.on('close', () => {
+        log.info('forward', `data channel ${label} closed by client`);
+
+        closed = true;
+        if (typeof remote !== 'undefined') {
+            remote.end();
+        }
+    });
+
     const connection = await connect();
 
+    if (closed) {
+        return;
+    }
+
     try {
-        const label = `${ipaddr.process(client.remoteAddress!).toString()}:${client.remotePort}`;
-        const remote = await connection.createChannelStream(label);
+        label = `${ipaddr.process(client.remoteAddress!).toString()}:${client.remotePort}`;
+        remote = await connection.createChannelStream(label);
 
         log.info('forward', `data channel ${label} created`);
 
         client.pipe(remote);
         remote.pipe(client);
 
-        client.on('error', (error) => {
-            log.warn('forward', 'data channel %s client error: %s', label, error.message);
-            log.warn('forward', error.stack!);
-
-            remote.end();
-        });
         remote.on('error', (error) => {
             log.warn('forward', 'data channel %s remote error: %s', label, error.message);
             log.warn('forward', error.stack!);
@@ -95,11 +115,6 @@ const server = createServer(async (client) => {
             client.end();
         });
 
-        client.on('close', () => {
-            log.info('forward', `data channel ${label} closed by client`);
-
-            remote.end();
-        });
         remote.on('close', () => {
             log.info('forward', `data channel ${label} closed by remote`);
 
