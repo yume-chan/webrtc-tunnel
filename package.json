@@ -30,7 +30,7 @@
     "npmlog": "4.1.2",
     "ts-node": "8.3.0",
     "typescript": "3.5.3",
-    "wrtc": "0.4.1",
+    "wrtc": "0.4.2",
     "ws": "7.1.2"
   },
   "homepage": "https://github.com/yume-chan/webrtc-tunnel#readme",
