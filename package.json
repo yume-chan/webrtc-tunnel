@@ -19,7 +19,7 @@
     "url": "https://github.com/yume-chan/webrtc-tunnel/issues"
   },
   "dependencies": {
-    "@types/node": "12.11.7",
+    "@types/node": "12.12.3",
     "@types/npmlog": "4.1.2",
     "@types/ws": "6.0.3",
     "@yume-chan/async-operation-manager": "1.0.1",
