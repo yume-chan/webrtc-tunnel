@@ -7,7 +7,6 @@ export function createRtcIceCandidate(): RTCIceCandidate {
         candidate,
         component: null,
         foundation: null,
-        ip: null,
         port: null,
         priority: null,
         protocol: null,

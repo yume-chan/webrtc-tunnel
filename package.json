@@ -15,6 +15,10 @@
   "keywords": [],
   "author": "Simon Chan",
   "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/yume-chan/webrtc-tunnel"
+  },
   "bugs": {
     "url": "https://github.com/yume-chan/webrtc-tunnel/issues"
   },
@@ -30,7 +34,7 @@
     "npmlog": "4.1.2",
     "ts-node": "8.6.2",
     "typescript": "3.5.3",
-    "wrtc": "0.4.3",
+    "wrtc": "0.4.4",
     "ws": "7.2.1"
   },
   "homepage": "https://github.com/yume-chan/webrtc-tunnel#readme",
