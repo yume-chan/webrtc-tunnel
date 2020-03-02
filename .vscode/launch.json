@@ -45,15 +45,18 @@
         },
         {
             "type": "node",
+            "name": "vscode-jest-tests",
             "request": "launch",
-            "name": "Jest Tests",
             "program": "${workspaceFolder}/node_modules/jest/bin/jest",
-            "sourceMaps": true,
             "args": [
                 "--runInBand",
                 "--setupTestFrameworkScriptFile=./scripts/setupTestFramework.js"
             ],
-            "internalConsoleOptions": "openOnSessionStart"
+            "cwd": "${workspaceFolder}",
+            "sourceMaps": true,
+            "console": "integratedTerminal",
+            "internalConsoleOptions": "neverOpen",
+            "disableOptimisticBPs": true
         }
     ],
 }

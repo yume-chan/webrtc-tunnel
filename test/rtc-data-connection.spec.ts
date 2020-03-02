@@ -1,4 +1,5 @@
 import log from 'npmlog';
+import { once } from 'events';
 
 import { KoshareClient, KoshareServer } from "@yume-chan/koshare-router";
 import { PromiseResolver } from "@yume-chan/async-operation-manager";
@@ -92,7 +93,7 @@ describe('rtc data connection', () => {
 
     test('send multiple', async () => {
         const label = Date.now().toString();
-        const data = randomString(1000);
+        const data = randomString(16 * 1024);
 
         const handleData = jest.fn((received: string) => {
             expect(received).toBe(data);
@@ -109,26 +110,26 @@ describe('rtc data connection', () => {
         const local = await client.createChannelStream(label);
         const remote = await resolver.promise;
 
-        const count = 100;
-        let i = 0;
-        async function writeData() {
-            while (i < count) {
-                i++
-                await delay(0);
+        const count = 1000;
+        (async () => {
+            for (let i = 0; i < count; i++) {
                 if (!local.write(data, 'utf8')) {
-                    break;
+                    await once(local, 'drain');
+                } else {
+                    await delay(0);
                 }
             }
-        }
-        local.on('drain', writeData);
-        writeData();
+        })();
 
         await delay(1000);
 
         remote.on('data', handleData);
 
-        await delay(1000);
+        await delay(2000);
 
         expect(handleData).toBeCalledTimes(count);
+
+        local.end();
+        await once(local, 'close');
     });
 });

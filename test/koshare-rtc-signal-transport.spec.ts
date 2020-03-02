@@ -3,8 +3,8 @@ import { KoshareClient, KoshareServer } from "@yume-chan/koshare-router";
 
 import { KoshareRtcSignalTransport } from "../src/koshare-rtc-signal-transport";
 import { PingMessage } from "../src/rtc-signal";
-import { createRtcIceCandidate, randomPort } from "./util";
-import { randomString } from "./util";
+import { createRtcIceCandidate, randomPort, randomString } from "./util";
+import { delay } from '../src/util';
 
 log.level = 'silent';
 
@@ -43,6 +43,9 @@ describe('koshare rtc signal transportation', () => {
         if (typeof koshareServer !== 'undefined') {
             koshareServer.close();
         }
+
+        // `client.close` requires some time
+        await delay(1000);
     });
 
     test('ping pong', async () => {
@@ -60,9 +63,11 @@ describe('koshare rtc signal transportation', () => {
         const pong = await client.broadcastPing({ sourceId: clientId, destinationId: serverId, offer });
 
         expect(handlePing).toBeCalledTimes(1);
-        expect(handlePing.mock.calls[0][0].sourceId).toBe(clientId);
-        expect(handlePing.mock.calls[0][0].destinationId).toBe(serverId);
-        expect(handlePing.mock.calls[0][0].offer).toEqual(offer);
+        expect(handlePing).toBeCalledWith(expect.objectContaining({
+            sourceId: clientId,
+            destinationId: serverId,
+            offer,
+        }));
 
         expect(pong.sourceId).toBe(serverId);
         expect(pong.destinationId).toBe(clientId);

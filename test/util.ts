@@ -26,7 +26,7 @@ export function createRtcIceCandidate(): RTCIceCandidate {
 }
 
 export function randomString(length: number = 20) {
-    return randomBytes(length).toString('hex');
+    return randomBytes(length / 2).toString('hex');
 }
 
 export function randomPort() {
