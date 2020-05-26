@@ -75,7 +75,8 @@ class LogStream extends Transform {
                     client.end();
                 });
             });
-        }
+        },
+        { iceServers: [{ urls: 'stun:stun.sipgate.net' }] }
     );
 
     log.info('server', 'server id: %s', serverId);

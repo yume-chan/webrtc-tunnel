@@ -129,12 +129,13 @@ export default class RtcDataConnection extends EventEmitter {
 
     public static async listen(
         signal: RtcSignalServer,
-        handler: (connection: RtcDataConnection) => void
+        handler: (connection: RtcDataConnection) => void,
+        configuration?: RTCConfiguration
     ): Promise<RtcDataConnectionListener> {
         await signal.listen(async (ping) => {
             const { sourceId, offer } = ping;
 
-            const raw = new RTCPeerConnection();
+            const raw = new RTCPeerConnection(configuration);
             let connection: RtcDataConnection;
             const candidates = new RtcIceCandidateQueue(raw);
 
