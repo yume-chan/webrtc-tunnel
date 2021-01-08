@@ -15,7 +15,7 @@ export default class RtcDataChannelStream extends Duplex {
 
         this._channel = channel;
         this._channel.binaryType = 'arraybuffer';
-        this._channel.addEventListener('message', ({ data }: { data: ArrayBuffer }) => {
+        this._channel.addEventListener('message', ({ data }: { data: ArrayBuffer; }) => {
             const buffer = Buffer.from(data);
             if (!this.push(buffer) && !this._localFull) {
                 this._dispatcher.sendControlMessage(this._channel, 'full');

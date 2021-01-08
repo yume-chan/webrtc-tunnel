@@ -59,7 +59,7 @@ export class KoshareRtcSignalTransport implements RtcSignalTransport {
         for (const handler of this._pingHandlers) {
             handler(packet);
         }
-    }
+    };
 
     private handlePongMessage = (packet: ForwardPacket<OperationMessage<PongMessage>>): void => {
         const {
@@ -70,7 +70,7 @@ export class KoshareRtcSignalTransport implements RtcSignalTransport {
 
         this.addIdMapping(src, sourceId);
         this._operationManager.resolve(id, packet);
-    }
+    };
 
     private handleIceCandidateMessage = (packet: ForwardPacket<IceCandidateMessage>): void => {
         const remoteId = this._koshareIdToSignalId.get(packet.src);
@@ -81,12 +81,12 @@ export class KoshareRtcSignalTransport implements RtcSignalTransport {
         for (const handler of this._iceCandidateHandlers) {
             handler(packet);
         }
-    }
+    };
 
     public async broadcastPing(message: PingMessage): Promise<PongMessage> {
         await Promise.all([this._subscribePong.get(), this._subscribeIceCandidate.get()]);
 
-        const { id, promise } = this._operationManager.add<PongMessage>();
+        const [id, promise] = this._operationManager.add<PongMessage>();
         await this._koshareClient.broadcast(KoshareRtcSignalTransportTopics.Ping, { id, ...message });
         return await promise;
     }

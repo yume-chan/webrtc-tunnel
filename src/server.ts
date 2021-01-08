@@ -26,7 +26,7 @@ class LogStream extends Transform {
         this._name = name;
     }
 
-    public _transform(chunk: Buffer, encoding: string, callback: () => void): void {
+    public _transform(chunk: Buffer, encoding: BufferEncoding, callback: () => void): void {
         this._received += chunk.length;
         log.verbose('stream', `stream ${this._name} reviced ${chunk.length}/${this._received} bytes`);
         this.push(chunk, encoding);

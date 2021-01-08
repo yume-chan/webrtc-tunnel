@@ -83,6 +83,7 @@ describe('rtc data connection', () => {
 
             remote.on('data', (data) => {
                 expect(data).toBe(content);
+
                 done();
             });
         });
@@ -128,8 +129,5 @@ describe('rtc data connection', () => {
         await delay(2000);
 
         expect(handleData).toBeCalledTimes(count);
-
-        local.end();
-        await once(local, 'close');
     });
 });

@@ -203,6 +203,7 @@ export default class RtcDataConnection extends EventEmitter {
                 (connectionState) => {
                     switch (connectionState) {
                         case 'failed':
+                        case 'closed':
                             process.nextTick(() => {
                                 this.emit('close');
                             });
@@ -213,6 +214,24 @@ export default class RtcDataConnection extends EventEmitter {
 
     public async createChannelStream(label: string): Promise<RtcDataChannelStream> {
         const channel = this._raw.createDataChannel(label, { priority: 'very-low' });
+        if (channel.readyState !== 'open') {
+            const waitOpen = new PromiseResolver<void>();
+            const cleanUp = () => {
+                channel.removeEventListener('open', handleOpen);
+                channel.removeEventListener('error', handleError);
+            };
+            const handleOpen = () => {
+                waitOpen.resolve();
+                cleanUp();
+            };
+            const handleError = ({ error }: RTCErrorEvent) => {
+                waitOpen.reject(error);
+                cleanUp();
+            };
+            channel.addEventListener('open', handleOpen);
+            channel.addEventListener('error', handleError);
+            await waitOpen.promise;
+        }
         this._dispatcher.addDataChannel(channel);
         return new RtcDataChannelStream(channel, this._dispatcher);
     }
