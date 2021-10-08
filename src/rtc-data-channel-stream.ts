@@ -22,9 +22,11 @@ export default class RtcDataChannelStream extends Duplex {
                 this._localFull = true;
             }
         });
-        this._channel.addEventListener('error', ({ error }) => {
+        this._channel.addEventListener('error', () => {
+            // TODO: TypeScript removed RTCErrorEvent
+            // Waiting for https://github.com/DefinitelyTyped/DefinitelyTyped/pull/56242
             process.nextTick(() => {
-                this.emit('error', error);
+                this.emit('error', new Error('RTCDataChannel error'));
                 this.end();
             });
         });
@@ -47,7 +49,11 @@ export default class RtcDataChannelStream extends Duplex {
             await this._dispatcher.send(this._channel, chunk);
             callback();
         } catch (e) {
-            callback(e);
+            if (e instanceof Error) {
+                callback(e);
+            } else {
+                callback(new Error(String(e)));
+            }
         }
     }
 

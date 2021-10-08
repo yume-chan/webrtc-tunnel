@@ -189,9 +189,11 @@ export default class RtcDataConnection extends EventEmitter {
         this._raw = connection;
 
         this._control = control;
-        this._control.addEventListener('error', ({ error }) => {
+        this._control.addEventListener('error', () => {
+            // TODO: TypeScript removed RTCErrorEvent
+            // Waiting for https://github.com/DefinitelyTyped/DefinitelyTyped/pull/56242
             process.nextTick(() => {
-                this.emit('error', error);
+                this.emit('error', new Error('control channel error'));
             });
         });
 
@@ -213,7 +215,7 @@ export default class RtcDataConnection extends EventEmitter {
     }
 
     public async createChannelStream(label: string): Promise<RtcDataChannelStream> {
-        const channel = this._raw.createDataChannel(label, { priority: 'very-low' });
+        const channel = this._raw.createDataChannel(label);
         if (channel.readyState !== 'open') {
             const waitOpen = new PromiseResolver<void>();
             const cleanUp = () => {
@@ -224,8 +226,10 @@ export default class RtcDataConnection extends EventEmitter {
                 waitOpen.resolve();
                 cleanUp();
             };
-            const handleError = ({ error }: RTCErrorEvent) => {
-                waitOpen.reject(error);
+            const handleError = () => {
+                // TODO: TypeScript removed RTCErrorEvent
+                // Waiting for https://github.com/DefinitelyTyped/DefinitelyTyped/pull/56242
+                waitOpen.reject(new Error('data channel open failed'));
                 cleanUp();
             };
             channel.addEventListener('open', handleOpen);

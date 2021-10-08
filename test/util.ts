@@ -4,6 +4,7 @@ export function createRtcIceCandidate(): RTCIceCandidate {
     const candidate = Date.now().toString();
 
     return {
+        address: null,
         candidate,
         component: null,
         foundation: null,

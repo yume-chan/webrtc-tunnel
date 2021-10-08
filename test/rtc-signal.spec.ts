@@ -74,42 +74,44 @@ describe('rtc signal', () => {
         expect(pong.answer).toEqual(offer);
     });
 
-    test('client ice candidate', async (done) => {
-        await server.listen(async (ping) => {
-            await server.pong(ping, ping.offer);
-        });
+    test('client ice candidate', (done) => {
+        (async () => {
+            await server.listen(async (ping) => {
+                await server.pong(ping, ping.offer);
+            });
 
-        const offer: RTCSessionDescriptionInit = { type: 'offer', sdp: Date.now().toString() };
-        await client.ping(serverId, offer);
+            const offer: RTCSessionDescriptionInit = { type: 'offer', sdp: Date.now().toString() };
+            await client.ping(serverId, offer);
 
-        const candidate = createRtcIceCandidate();
+            const candidate = createRtcIceCandidate();
 
-        await server.addIceCandidateListener(clientId, (message) => {
-            expect(message).toEqual(candidate.toJSON());
+            server.addIceCandidateListener(clientId, (message) => {
+                expect(message).toEqual(candidate.toJSON());
+                done();
+            });
 
-            done();
-        });
-
-        await client.sendIceCandidate(serverId, candidate);
+            await client.sendIceCandidate(serverId, candidate);
+        })();
     });
 
-    test('server ice candidate', async (done) => {
-        await server.listen(async (ping) => {
-            await server.pong(ping, ping.offer);
-        });
+    test('server ice candidate', (done) => {
+        (async () => {
+            await server.listen(async (ping) => {
+                await server.pong(ping, ping.offer);
+            });
 
-        const offer: RTCSessionDescriptionInit = { type: 'offer', sdp: Date.now().toString() };
-        await client.ping(serverId, offer);
+            const offer: RTCSessionDescriptionInit = { type: 'offer', sdp: Date.now().toString() };
+            await client.ping(serverId, offer);
 
-        const candidate = createRtcIceCandidate();
+            const candidate = createRtcIceCandidate();
 
-        await client.addIceCandidateListener(serverId, (message) => {
-            expect(message).toEqual(candidate.toJSON());
+            client.addIceCandidateListener(serverId, (message) => {
+                expect(message).toEqual(candidate.toJSON());
+                done();
+            });
 
-            done();
-        });
-
-        await server.sendIceCandidate(clientId, candidate);
+            await server.sendIceCandidate(clientId, candidate);
+        })();
     });
 
     test('remove ice candidate listener', async () => {
@@ -123,7 +125,7 @@ describe('rtc signal', () => {
         const candidate = createRtcIceCandidate();
 
         const handleIceCandidate = jest.fn();
-        await client.addIceCandidateListener(serverId, handleIceCandidate);
+        client.addIceCandidateListener(serverId, handleIceCandidate);
         await server.sendIceCandidate(clientId, candidate);
 
         await delay(100);

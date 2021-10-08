@@ -74,57 +74,61 @@ describe('koshare rtc signal transportation', () => {
         expect(pong.answer).toEqual(offer);
     });
 
-    test('client ice candidate', async (callback) => {
-        await server.addPingHandler(async (ping) => {
-            await server.sendPong(ping, {
-                sourceId: ping.destinationId,
-                destinationId: ping.sourceId,
-                answer: ping.offer,
+    test('client ice candidate', (callback) => {
+        (async () => {
+            await server.addPingHandler(async (ping) => {
+                await server.sendPong(ping, {
+                    sourceId: ping.destinationId,
+                    destinationId: ping.sourceId,
+                    answer: ping.offer,
+                });
             });
-        });
 
-        const candidate = createRtcIceCandidate();
+            const candidate = createRtcIceCandidate();
 
-        await server.addIceCandidateHandler((message) => {
-            expect(message.sourceId).toBe(clientId);
-            expect(message.destinationId).toBe(serverId);
-            expect(message.candidate).toEqual(candidate.toJSON());
+            await server.addIceCandidateHandler((message) => {
+                expect(message.sourceId).toBe(clientId);
+                expect(message.destinationId).toBe(serverId);
+                expect(message.candidate).toEqual(candidate.toJSON());
 
-            callback();
-        });
+                callback();
+            });
 
-        const offer: RTCSessionDescriptionInit = { type: 'offer', sdp: Date.now().toString() };
-        await client.broadcastPing({ sourceId: clientId, destinationId: serverId, offer });
+            const offer: RTCSessionDescriptionInit = { type: 'offer', sdp: Date.now().toString() };
+            await client.broadcastPing({ sourceId: clientId, destinationId: serverId, offer });
 
-        await client.sendIceCandidate({ sourceId: clientId, destinationId: serverId, candidate });
+            await client.sendIceCandidate({ sourceId: clientId, destinationId: serverId, candidate });
+        })();
     });
 
-    test('server ice candidate', async (callback) => {
-        const candidate = createRtcIceCandidate();
+    test('server ice candidate', (callback) => {
+        (async () => {
+            const candidate = createRtcIceCandidate();
 
-        await server.addPingHandler(async (ping) => {
-            await server.sendPong(ping, {
-                sourceId: ping.destinationId,
-                destinationId: ping.sourceId,
-                answer: ping.offer,
+            await server.addPingHandler(async (ping) => {
+                await server.sendPong(ping, {
+                    sourceId: ping.destinationId,
+                    destinationId: ping.sourceId,
+                    answer: ping.offer,
+                });
+
+                await server.sendIceCandidate({
+                    sourceId: ping.destinationId,
+                    destinationId: ping.sourceId,
+                    candidate,
+                });
             });
 
-            await server.sendIceCandidate({
-                sourceId: ping.destinationId,
-                destinationId: ping.sourceId,
-                candidate,
+            await client.addIceCandidateHandler((message) => {
+                expect(message.sourceId).toBe(serverId);
+                expect(message.destinationId).toBe(clientId);
+                expect(message.candidate).toEqual(candidate.toJSON());
+
+                callback();
             });
-        });
 
-        await client.addIceCandidateHandler((message) => {
-            expect(message.sourceId).toBe(serverId);
-            expect(message.destinationId).toBe(clientId);
-            expect(message.candidate).toEqual(candidate.toJSON());
-
-            callback();
-        });
-
-        const offer: RTCSessionDescriptionInit = { type: 'offer', sdp: Date.now().toString() };
-        await client.broadcastPing({ sourceId: clientId, destinationId: serverId, offer });
+            const offer: RTCSessionDescriptionInit = { type: 'offer', sdp: Date.now().toString() };
+            await client.broadcastPing({ sourceId: clientId, destinationId: serverId, offer });
+        })();
     });
 });

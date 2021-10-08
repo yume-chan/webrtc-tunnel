@@ -25,28 +25,30 @@ describe('rtc data connection', () => {
 
     const port = randomPort();
 
-    beforeEach(async (done) => {
-        koshareServer = await KoshareServer.listen({ port });
+    beforeEach((done) => {
+        (async () => {
+            koshareServer = await KoshareServer.listen({ port });
 
-        serverId = randomString();
-        clientId = randomString();
+            serverId = randomString();
+            clientId = randomString();
 
-        await RtcDataConnection.listen(
-            new RtcSignalServer(
+            await RtcDataConnection.listen(
+                new RtcSignalServer(
+                    serverId,
+                    new KoshareRtcSignalTransport(
+                        await KoshareClient.connect(`ws://localhost:${port}`))),
+                (connection) => {
+                    server = connection;
+                    done();
+                });
+
+            client = await RtcDataConnection.connect(
                 serverId,
-                new KoshareRtcSignalTransport(
-                    await KoshareClient.connect(`ws://localhost:${port}`))),
-            (connection) => {
-                server = connection;
-                done();
-            });
-
-        client = await RtcDataConnection.connect(
-            serverId,
-            new RtcSignalClient(
-                clientId,
-                new KoshareRtcSignalTransport(
-                    await KoshareClient.connect(`ws://localhost:${port}`))));
+                new RtcSignalClient(
+                    clientId,
+                    new KoshareRtcSignalTransport(
+                        await KoshareClient.connect(`ws://localhost:${port}`))));
+        })();
     });
 
     afterEach(async () => {
@@ -63,33 +65,35 @@ describe('rtc data connection', () => {
         }
     });
 
-    test('create data channel stream', async (done) => {
-        let label = Date.now().toString();
+    test('create data channel stream', (done) => {
+        (async () => {
+            let label = Date.now().toString();
 
-        server.on('data-channel-stream', (remote) => {
-            expect(remote.label).toBe(label);
-
-            done();
-        });
-
-        await client.createChannelStream(label);
-    });
-
-    test('send once', async (done) => {
-        let content = randomString();
-
-        server.on('data-channel-stream', (remote) => {
-            remote.setEncoding('utf8');
-
-            remote.on('data', (data) => {
-                expect(data).toBe(content);
-
+            server.on('data-channel-stream', (remote) => {
+                expect(remote.label).toBe(label);
                 done();
             });
-        });
 
-        const local = await client.createChannelStream(randomString());
-        local.write(content, 'utf8');
+            await client.createChannelStream(label);
+        })();
+    });
+
+    test('send once', (done) => {
+        (async () => {
+            let content = randomString();
+
+            server.on('data-channel-stream', (remote) => {
+                remote.setEncoding('utf8');
+
+                remote.on('data', (data) => {
+                    expect(data).toBe(content);
+                    done();
+                });
+            });
+
+            const local = await client.createChannelStream(randomString());
+            local.write(content, 'utf8');
+        })();
     });
 
     test('send multiple', async () => {

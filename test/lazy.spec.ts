@@ -17,7 +17,7 @@ describe('lazy', () => {
         expect(value).toBe(42);
     });
 
-    test('.get() multiple', () => {
+    test('.get() multiple times', () => {
         const creator = jest.fn(() => 42);
         const lazy: Lazy<number> = new Lazy(creator);
 
