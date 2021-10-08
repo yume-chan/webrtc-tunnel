@@ -2,8 +2,6 @@ import MultiMap from '@yume-chan/multi-map';
 
 import Lazy from './lazy';
 
-export type Omit<T, K extends keyof T> = Pick<T, Exclude<keyof T, K>>;
-
 export interface RtcSignalTransport {
     broadcastPing(message: PingMessage): Promise<PongMessage>;
 
@@ -48,7 +46,7 @@ abstract class RtcSignalBase {
 
     protected _addIceCandidateHandler: Lazy<Promise<void>> = new Lazy(() =>
         this._transportation.addIceCandidateHandler(this.handleIceCandidateMessage)
-    )
+    );
 
     protected constructor(localId: string, transportation: RtcSignalTransport) {
         this._id = localId;
@@ -59,7 +57,7 @@ abstract class RtcSignalBase {
         for (const handler of this._iceCandidateHandlers.get(message.sourceId)) {
             handler(message.candidate);
         }
-    }
+    };
 
     public addIceCandidateListener(remoteId: string, handler: IceCandidateHandler): void {
         this._iceCandidateHandlers.add(remoteId, handler);
@@ -106,7 +104,7 @@ export class RtcSignalServer extends RtcSignalBase {
                 handler(message);
             }
         }
-    }
+    };
 
     public async listen(handler: (message: PingMessage) => void): Promise<void> {
         await this._addIceCandidateHandler.get();
