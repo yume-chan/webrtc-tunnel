@@ -1,4 +1,4 @@
-import AsyncOperationManager from "@yume-chan/async-operation-manager";
+import { AsyncOperationManager } from "@yume-chan/async";
 import { KoshareClient, PacketType, ForwardPacket } from "@yume-chan/koshare-router";
 
 import Lazy from "./lazy";

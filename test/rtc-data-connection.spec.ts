@@ -2,7 +2,7 @@ import log from 'npmlog';
 import { once } from 'events';
 
 import { KoshareClient, KoshareServer } from "@yume-chan/koshare-router";
-import { PromiseResolver } from "@yume-chan/async-operation-manager";
+import { PromiseResolver } from "@yume-chan/async";
 
 import { KoshareRtcSignalTransport } from "../src/koshare-rtc-signal-transport";
 import RtcDataConnection from "../src/rtc-data-connection";

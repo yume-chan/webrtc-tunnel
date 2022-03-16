@@ -120,7 +120,7 @@ const server = createServer(async (client) => {
 
             client.end();
         });
-    } catch (error) {
+    } catch (error: any) {
         log.warn('forward', 'main loop error: %s', error.message);
         log.warn('forward', error.stack!);
 

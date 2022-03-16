@@ -1,4 +1,4 @@
-import { PromiseResolver } from "@yume-chan/async-operation-manager";
+import { PromiseResolver } from "@yume-chan/async";
 
 interface RtcDataChannelSendTask {
     resolver: PromiseResolver<void>;
@@ -77,7 +77,7 @@ export class RtcDataChannelDispatcher {
 
     constructor(control: RTCDataChannel) {
         this._control = control;
-        this._control.addEventListener('message', ({ data }: { data: string }) => {
+        this._control.addEventListener('message', ({ data }: { data: string; }) => {
             const message: RtcDataChannelControlMessage = JSON.parse(data);
 
             const queue = this._queues.get(message.label);
